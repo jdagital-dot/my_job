@@ -48,11 +48,6 @@
   }
   #menu-btn:hover { background: #f0f0ee; }
   #save-status { font-size: 0.8rem; color: #aaa; margin-left: auto; }
-  #save-btn {
-    background: #2eaadc; color: white; border: none;
-    padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
-  }
-  #save-btn:hover { background: #2799c5; }
   #delete-btn {
     background: none; border: 1px solid #e0e0de; color: #999;
     padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
@@ -119,7 +114,6 @@
   <div id="topbar">
     <button id="menu-btn" onclick="toggleSidebar()">☰</button>
     <span id="save-status"></span>
-    <button id="save-btn" onclick="saveNote()" style="display:none">保存</button>
     <button id="delete-btn" onclick="deleteNote()" style="display:none">削除</button>
   </div>
 
@@ -132,24 +126,7 @@
   <div id="editor-area" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
     <div id="toolbar">
       <span class="ql-formats">
-        <select class="ql-header"><option value="1">見出し1</option><option value="2">見出し2</option><option value="3">見出し3</option><option selected>本文</option></select>
-      </span>
-      <span class="ql-formats">
         <button class="ql-bold"></button>
-        <button class="ql-italic"></button>
-        <button class="ql-underline"></button>
-        <button class="ql-strike"></button>
-      </span>
-      <span class="ql-formats">
-        <button class="ql-list" value="ordered"></button>
-        <button class="ql-list" value="bullet"></button>
-      </span>
-      <span class="ql-formats">
-        <button class="ql-blockquote"></button>
-        <button class="ql-code-block"></button>
-      </span>
-      <span class="ql-formats">
-        <button class="ql-clean"></button>
       </span>
     </div>
     <div id="editor-wrap">
@@ -164,6 +141,7 @@
 let notes = [];
 let currentId = null;
 let quill;
+let autoSaveTimer = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -172,8 +150,19 @@ window.addEventListener('DOMContentLoaded', () => {
     modules: { toolbar: '#toolbar' },
     placeholder: '書き始めましょう…'
   });
+
+  // 自動保存：入力が止まって1秒後に保存
+  quill.on('text-change', scheduleAutoSave);
+  document.getElementById('title-input').addEventListener('input', scheduleAutoSave);
+
   loadNotes();
 });
+
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer);
+  setStatus('未保存…');
+  autoSaveTimer = setTimeout(saveNote, 1000);
+}
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function loadNotes() {
@@ -264,14 +253,12 @@ function showEditor() {
   ea.style.flexDirection = 'column';
   ea.style.flex = '1';
   ea.style.overflow = 'hidden';
-  document.getElementById('save-btn').style.display = '';
   document.getElementById('delete-btn').style.display = currentId ? '' : 'none';
 }
 
 function hideEditor() {
   document.getElementById('placeholder-screen').style.display = '';
   document.getElementById('editor-area').style.display = 'none';
-  document.getElementById('save-btn').style.display = 'none';
   document.getElementById('delete-btn').style.display = 'none';
 }
 
