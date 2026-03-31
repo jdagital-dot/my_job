@@ -69,6 +69,8 @@
   .ql-editor { padding: 0 !important; min-height: 300px; color: #37352f; line-height: 1.75; }
   .ql-editor p { margin-bottom: 4px; }
   .ql-editor.ql-blank::before { color: #c8c7c3; font-style: normal; left: 0; }
+  .ql-cb { cursor: pointer; font-size: 1.1em; margin-right: 6px; user-select: none; }
+  .ql-cb[data-checked="true"] { color: #2eaadc; }
 
   #placeholder-screen {
     flex: 1; display: flex; flex-direction: column;
@@ -128,6 +130,9 @@
       <span class="ql-formats">
         <button class="ql-bold"></button>
       </span>
+      <span class="ql-formats">
+        <button id="cb-btn" title="チェックボックス" onclick="insertCheckbox()">☐</button>
+      </span>
     </div>
     <div id="editor-wrap">
       <textarea id="title-input" placeholder="タイトルなし" rows="1" oninput="autoResize(this)"></textarea>
@@ -138,6 +143,22 @@
 
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
+// ── Checkbox Blot ─────────────────────────────────────────────────────────────
+const Embed = Quill.import('blots/embed');
+class CheckboxBlot extends Embed {
+  static create(checked) {
+    const node = super.create();
+    node.dataset.checked = checked ? 'true' : 'false';
+    node.textContent = checked ? '☑' : '☐';
+    return node;
+  }
+  static value(node) { return node.dataset.checked === 'true'; }
+}
+CheckboxBlot.blotName = 'checkbox';
+CheckboxBlot.tagName = 'span';
+CheckboxBlot.className = 'ql-cb';
+Quill.register(CheckboxBlot);
+
 let notes = [];
 let currentId = null;
 let quill;
@@ -155,8 +176,27 @@ window.addEventListener('DOMContentLoaded', () => {
   quill.on('text-change', scheduleAutoSave);
   document.getElementById('title-input').addEventListener('input', scheduleAutoSave);
 
+  // チェックボックスのクリックでON/OFF切り替え
+  quill.root.addEventListener('click', e => {
+    if (e.target.classList.contains('ql-cb')) {
+      const checked = e.target.dataset.checked === 'true';
+      e.target.dataset.checked = String(!checked);
+      e.target.textContent = checked ? '☐' : '☑';
+      scheduleAutoSave();
+    }
+  });
+
   loadNotes();
 });
+
+function insertCheckbox() {
+  const range = quill.getSelection(true);
+  // 行頭に移動してチェックボックスを挿入
+  const [line, offset] = quill.getLine(range.index);
+  const lineStart = range.index - offset;
+  quill.insertEmbed(lineStart, 'checkbox', false, Quill.sources.USER);
+  quill.setSelection(lineStart + 1, Quill.sources.SILENT);
+}
 
 function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
