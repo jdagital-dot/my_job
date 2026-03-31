@@ -3,98 +3,167 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>メモ帳</title>
+<title>My Job - Notes</title>
+<!-- Google Fonts: Inter -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Quill CSS -->
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 <style>
+  :root {
+    --bg-main: #FFFFFF;
+    --bg-sidebar: #FAFAFA;
+    --border-color: #EAEAEA;
+    --text-primary: #111111;
+    --text-secondary: #737373;
+    --hover-bg: #F4F4F5;
+    --accent: #000000;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; height: 100dvh; display: flex; overflow: hidden; }
+  body { 
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+    background: var(--bg-main); 
+    color: var(--text-primary);
+    height: 100dvh; 
+    display: flex; 
+    overflow: hidden; 
+    -webkit-font-smoothing: antialiased;
+  }
 
   /* ── Sidebar ── */
   #sidebar {
-    width: 240px; min-width: 240px; background: #f7f7f5; display: flex;
-    flex-direction: column; border-right: 1px solid #e8e8e6;
-    transition: transform 0.25s ease; z-index: 100;
+    width: 260px; min-width: 260px; background: var(--bg-sidebar); 
+    display: flex; flex-direction: column; 
+    border-right: 1px solid var(--border-color);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+    z-index: 100;
   }
-  #sidebar-header { padding: 16px 12px 8px; display: flex; align-items: center; justify-content: space-between; }
-  #sidebar-title { font-size: 0.85rem; font-weight: 600; color: #888; letter-spacing: 0.05em; }
+  #sidebar-header { 
+    padding: 24px 20px 16px; 
+    display: flex; align-items: center; justify-content: space-between; 
+  }
+  #sidebar-title { 
+    font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); 
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
   #new-btn {
-    display: flex; align-items: center; gap: 4px;
-    background: none; border: none; color: #555; cursor: pointer;
-    font-size: 0.85rem; padding: 4px 8px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
+    font-size: 1.2rem; padding: 4px; border-radius: 6px;
+    transition: all 0.2s ease;
   }
-  #new-btn:hover { background: #e8e8e6; }
-  #note-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  #new-btn:hover { background: var(--hover-bg); color: var(--text-primary); }
+  
+  #note-list { flex: 1; overflow-y: auto; padding: 0 12px; }
+  
   .note-item {
-    padding: 8px 14px; cursor: pointer; border-radius: 4px;
-    margin: 1px 6px; display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; cursor: pointer; border-radius: 8px;
+    margin-bottom: 4px; display: flex; align-items: center; gap: 12px;
+    transition: background 0.2s ease;
   }
-  .note-item:hover { background: #e8e8e6; }
-  .note-item.active { background: #e3e3e0; }
-  .note-item .note-icon { font-size: 1rem; flex-shrink: 0; }
-  .note-item-info { overflow: hidden; }
-  .note-item .note-title { font-size: 0.875rem; color: #37352f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .note-item .note-date { font-size: 0.7rem; color: #999; margin-top: 2px; }
-  .empty { padding: 20px 14px; color: #aaa; font-size: 0.85rem; }
+  .note-item:hover { background: var(--hover-bg); }
+  .note-item.active { background: #EFEFEF; }
+  
+  .note-item .note-icon { font-size: 1rem; opacity: 0.6; }
+  .note-item-info { overflow: hidden; width: 100%; }
+  .note-item .note-title { 
+    font-size: 0.875rem; font-weight: 500; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+  }
+  .note-item .note-date { font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; }
+  .empty { padding: 24px 20px; color: var(--text-secondary); font-size: 0.85rem; text-align: center; }
 
   /* ── Main ── */
-  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;}
+  
   #topbar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 16px; border-bottom: 1px solid #f0f0ee; min-height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; min-height: 60px;
   }
   #menu-btn {
     display: none; background: none; border: none; cursor: pointer;
-    font-size: 1.2rem; padding: 4px; color: #555; border-radius: 4px;
+    font-size: 1.2rem; padding: 8px; color: var(--text-secondary); border-radius: 6px;
   }
-  #menu-btn:hover { background: #f0f0ee; }
-  #save-status { font-size: 0.8rem; color: #aaa; margin-left: auto; }
+  #menu-btn:hover { background: var(--hover-bg); }
+  
+  #topbar-right { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+  #save-status { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500;}
   #delete-btn {
-    background: none; border: 1px solid #e0e0de; color: #999;
-    padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+    background: none; border: none; color: var(--text-secondary);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.875rem;
+    font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center;
   }
-  #delete-btn:hover { background: #fff0f0; border-color: #e74c3c; color: #e74c3c; }
+  #delete-btn:hover { background: #FEE2E2; color: #DC2626; }
 
-  #editor-wrap { flex: 1; overflow-y: auto; padding: 40px max(40px, calc(50% - 360px)); }
+  #editor-wrap { 
+    flex: 1; overflow-y: auto; 
+    padding: 0 40px 80px 40px; 
+    max-width: 800px; margin: 0 auto; width: 100%;
+  }
+  
   #title-input {
-    width: 100%; border: none; outline: none; font-size: 2rem;
-    font-weight: 700; color: #37352f; margin-bottom: 20px;
-    line-height: 1.3; resize: none; background: transparent;
+    width: 100%; border: none; outline: none; 
+    font-size: 2.25rem; font-weight: 600; color: var(--text-primary); 
+    margin-bottom: 24px; padding: 0;
+    line-height: 1.2; resize: none; background: transparent;
     font-family: inherit;
+    letter-spacing: -0.02em;
   }
-  #title-input::placeholder { color: #c8c7c3; }
+  #title-input::placeholder { color: #E5E5E5; }
 
-  /* Quill overrides */
-  .ql-container { border: none !important; font-size: 1rem; }
-  .ql-toolbar { border: none !important; border-bottom: 1px solid #f0f0ee !important; background: #fafaf9; }
-  .ql-editor { padding: 0 !important; min-height: 300px; color: #37352f; line-height: 1.75; }
-  .ql-editor p { margin-bottom: 4px; }
-  .ql-editor.ql-blank::before { color: #c8c7c3; font-style: normal; left: 0; }
+  /* Minimal Quill overrides */
+  .ql-container { border: none !important; font-size: 1rem; font-family: inherit;}
+  .ql-toolbar { 
+    border: none !important; 
+    border-bottom: 1px solid var(--border-color) !important; 
+    background: transparent; 
+    padding: 12px 32px !important;
+    margin-bottom: 32px;
+  }
+  .ql-editor { padding: 0 !important; min-height: 300px; color: var(--text-primary); line-height: 1.8; }
+  .ql-editor p { margin-bottom: 1em; }
+  .ql-editor h1, .ql-editor h2 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; letter-spacing: -0.01em;}
+  .ql-editor.ql-blank::before { color: #D4D4D4; font-style: normal; left: 0; }
   .ql-cb { cursor: pointer; font-size: 1.1em; margin-right: 6px; user-select: none; }
-  .ql-cb[data-checked="true"] { color: #2eaadc; }
+  .ql-cb[data-checked="true"] { color: var(--accent); }
 
   #placeholder-screen {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; color: #ccc; gap: 12px;
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    background: var(--bg-main);
   }
-  #placeholder-screen .ph-icon { font-size: 3rem; }
-  #placeholder-screen p { font-size: 0.95rem; }
+  #placeholder-screen .ph-icon { font-size: 2.5rem; color: var(--text-secondary); opacity: 0.4;}
+  #placeholder-screen p { font-size: 0.95rem; color: var(--text-secondary); }
+  #placeholder-screen button {
+    background: var(--accent); color: white; border: none; 
+    padding: 10px 20px; border-radius: 8px; cursor: pointer; 
+    font-size: 0.875rem; font-weight: 500; font-family: inherit;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  #placeholder-screen button:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
 
   /* ── Mobile overlay ── */
   #overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.3); z-index: 90;
+    background: rgba(0,0,0,0.1); backdrop-filter: blur(2px); z-index: 90;
+    transition: opacity 0.3s ease;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     #sidebar {
       position: fixed; top: 0; left: 0; bottom: 0;
       transform: translateX(-100%);
+      box-shadow: 4px 0 24px rgba(0,0,0,0.05);
     }
     #sidebar.open { transform: translateX(0); }
     #menu-btn { display: block; }
     #overlay.show { display: block; }
-    #editor-wrap { padding: 24px 20px; }
-    #title-input { font-size: 1.5rem; }
+    #editor-wrap { padding: 0 24px 60px 24px; }
+    #title-input { font-size: 1.75rem; margin-top: 16px;}
+    .ql-toolbar { padding: 12px 24px !important; }
   }
 </style>
 </head>
@@ -105,8 +174,10 @@
 <!-- Sidebar -->
 <div id="sidebar">
   <div id="sidebar-header">
-    <span id="sidebar-title">ページ</span>
-    <button id="new-btn" onclick="newNote()">＋ 新規</button>
+    <span id="sidebar-title">Notes</span>
+    <button id="new-btn" onclick="newNote()" title="新規作成">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    </button>
   </div>
   <div id="note-list"></div>
 </div>
@@ -114,24 +185,34 @@
 <!-- Main -->
 <div id="main">
   <div id="topbar">
-    <button id="menu-btn" onclick="toggleSidebar()">☰</button>
-    <span id="save-status"></span>
-    <button id="delete-btn" onclick="deleteNote()" style="display:none">削除</button>
+    <button id="menu-btn" onclick="toggleSidebar()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <div id="topbar-right">
+      <span id="save-status"></span>
+      <button id="delete-btn" onclick="deleteNote()" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      </button>
+    </div>
   </div>
 
   <div id="placeholder-screen">
-    <div class="ph-icon">📝</div>
-    <p>左のリストからページを選ぶか、新規作成してください</p>
-    <button id="new-btn2" onclick="newNote()" style="background:#2eaadc;color:white;border:none;padding:8px 18px;border-radius:4px;cursor:pointer;font-size:0.9rem;">＋ 新規ページ</button>
+    <div class="ph-icon">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+    </div>
+    <p>左のリストからページを選ぶか、新しく作成してください</p>
+    <button onclick="newNote()">＋ 新規ページ</button>
   </div>
 
-  <div id="editor-area" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
+  <div id="editor-area" style="display:none;flex:1;flex-direction:column;overflow:hidden;z-index:10;background:var(--bg-main);">
     <div id="toolbar">
       <span class="ql-formats">
+        <button class="ql-header" value="1"></button>
+        <button class="ql-header" value="2"></button>
         <button class="ql-bold"></button>
-      </span>
-      <span class="ql-formats">
-        <button id="cb-btn" title="チェックボックス" onclick="insertCheckbox()">☐</button>
+        <button class="ql-list" value="ordered"></button>
+        <button class="ql-list" value="bullet"></button>
+        <button id="cb-btn" title="チェックボックス" onclick="insertCheckbox()" style="font-size:1rem;">☐</button>
       </span>
     </div>
     <div id="editor-wrap">
@@ -164,7 +245,6 @@ let currentId = null;
 let quill;
 let autoSaveTimer = null;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   quill = new Quill('#quill-editor', {
     theme: 'snow',
@@ -172,7 +252,6 @@ window.addEventListener('DOMContentLoaded', () => {
     placeholder: '書き始めましょう…'
   });
 
-  // 自動保存：入力が止まって1秒後に保存
   quill.on('text-change', scheduleAutoSave);
   document.getElementById('title-input').addEventListener('input', scheduleAutoSave);
 
@@ -191,8 +270,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function insertCheckbox() {
   const range = quill.getSelection(true);
-  // 行頭に移動してチェックボックスを挿入
-  const [line, offset] = quill.getLine(range.index);
+  const [, offset] = quill.getLine(range.index);
   const lineStart = range.index - offset;
   quill.insertEmbed(lineStart, 'checkbox', false, Quill.sources.USER);
   quill.setSelection(lineStart + 1, Quill.sources.SILENT);
@@ -200,15 +278,20 @@ function insertCheckbox() {
 
 function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
-  setStatus('未保存…');
+  setStatus('保存中...');
   autoSaveTimer = setTimeout(saveNote, 1000);
 }
 
-// ── API ───────────────────────────────────────────────────────────────────────
 async function loadNotes() {
-  const res = await fetch('/api/notes');
-  notes = await res.json();
-  renderList();
+  try {
+    const res = await fetch('/api/notes');
+    if(!res.ok) return;
+    notes = await res.json();
+    renderList();
+    if (!currentId && notes.length > 0) {
+      openNote(notes[0].id);
+    }
+  } catch(e) { console.error(e); }
 }
 
 function renderList() {
@@ -219,7 +302,7 @@ function renderList() {
   }
   el.innerHTML = notes.map(n => `
     <div class="note-item ${n.id === currentId ? 'active' : ''}" onclick="openNote('${n.id}')">
-      <span class="note-icon">📄</span>
+      <svg class="note-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
       <div class="note-item-info">
         <div class="note-title">${escHtml(n.title || 'タイトルなし')}</div>
         <div class="note-date">${formatDate(n.updated_at)}</div>
@@ -248,56 +331,55 @@ function newNote() {
   showEditor();
   renderList();
   closeSidebar();
-  document.getElementById('title-input').focus();
+  setTimeout(() => document.getElementById('title-input').focus(), 100);
 }
 
 async function saveNote() {
   const title = document.getElementById('title-input').value.trim() || 'タイトルなし';
   const content = JSON.stringify(quill.getContents());
-  setStatus('保存中…');
-
-  if (currentId) {
-    await fetch(`/api/notes/${currentId}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({title, content})
-    });
-  } else {
-    const res = await fetch('/api/notes', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({title, content})
-    });
-    const data = await res.json();
-    currentId = data.id;
-  }
-  setStatus('保存済み ✓');
-  await loadNotes();
-  setTimeout(() => setStatus(''), 2000);
+  
+  try {
+    if (currentId) {
+      await fetch('/api/notes/' + currentId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title, content})
+      });
+    } else {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title, content})
+      });
+      if(res.ok){
+          const data = await res.json();
+          currentId = data.id;
+      }
+    }
+    setStatus('保存しました');
+    await loadNotes();
+    setTimeout(() => setStatus(''), 2000);
+  } catch(e) { console.error(e); setStatus('保存エラー'); }
 }
 
 async function deleteNote() {
   if (!currentId) return;
   if (!confirm('このページを削除しますか？')) return;
-  await fetch(`/api/notes/${currentId}`, {method: 'DELETE'});
+  await fetch('/api/notes/' + currentId, {method: 'DELETE'});
   currentId = null;
   hideEditor();
   await loadNotes();
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
 function showEditor() {
   document.getElementById('placeholder-screen').style.display = 'none';
   const ea = document.getElementById('editor-area');
   ea.style.display = 'flex';
-  ea.style.flexDirection = 'column';
-  ea.style.flex = '1';
-  ea.style.overflow = 'hidden';
-  document.getElementById('delete-btn').style.display = currentId ? '' : 'none';
+  document.getElementById('delete-btn').style.display = currentId ? 'flex' : 'none';
 }
 
 function hideEditor() {
-  document.getElementById('placeholder-screen').style.display = '';
+  document.getElementById('placeholder-screen').style.display = 'flex';
   document.getElementById('editor-area').style.display = 'none';
   document.getElementById('delete-btn').style.display = 'none';
 }
@@ -326,11 +408,13 @@ function escHtml(s) {
 }
 
 function formatDate(iso) {
+  if(!iso) return '';
   const d = new Date(iso);
-  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const month = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${month}/${day} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-// Enterキーでタイトルからエディタへ移動
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('title-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); quill.focus(); }
