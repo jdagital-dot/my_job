@@ -248,7 +248,36 @@ let autoSaveTimer = null;
 window.addEventListener('DOMContentLoaded', () => {
   quill = new Quill('#quill-editor', {
     theme: 'snow',
-    modules: { toolbar: '#toolbar' },
+    modules: {
+      toolbar: '#toolbar',
+      keyboard: {
+        bindings: {
+          checkboxEnter: {
+            key: 'Enter',
+            handler(range) {
+              const [line, offset] = quill.getLine(range.index);
+              const lineStart = range.index - offset;
+              const leaf = line.children && line.children.head;
+              if (leaf && leaf.domNode && leaf.domNode.classList.contains('ql-cb')) {
+                // 空のチェックボックス行 → 解除して通常改行
+                if (line.length() <= 2) {
+                  quill.deleteText(lineStart, 1, Quill.sources.USER);
+                  quill.insertText(lineStart, '\n', Quill.sources.USER);
+                  quill.setSelection(lineStart + 1, Quill.sources.SILENT);
+                } else {
+                  // 次行にもチェックボックスを追加
+                  quill.insertText(range.index, '\n', Quill.sources.USER);
+                  quill.insertEmbed(range.index + 1, 'checkbox', false, Quill.sources.USER);
+                  quill.setSelection(range.index + 2, Quill.sources.SILENT);
+                }
+                return false;
+              }
+              return true;
+            }
+          }
+        }
+      }
+    },
     placeholder: '書き始めましょう…'
   });
 
@@ -263,31 +292,6 @@ window.addEventListener('DOMContentLoaded', () => {
       e.target.textContent = checked ? '☐' : '☑';
       scheduleAutoSave();
     }
-  });
-
-  // Enterキーでチェックボックス行を継続
-  quill.keyboard.addBinding({ key: 'Enter' }, {
-    collapsed: true,
-  }, function(range) {
-    const [line, offset] = quill.getLine(range.index);
-    const lineStart = range.index - offset;
-    // 行の最初のLeafがチェックボックスかチェック
-    const leaf = line.children && line.children.head;
-    if (leaf && leaf.domNode && leaf.domNode.classList && leaf.domNode.classList.contains('ql-cb')) {
-      // 行にチェックボックスしかない（空行）→ チェックボックス削除して通常改行
-      if (line.length() <= 2) {
-        quill.deleteText(lineStart, 1, Quill.sources.USER);
-        quill.insertText(lineStart, '\n', Quill.sources.USER);
-        quill.setSelection(lineStart + 1, Quill.sources.SILENT);
-      } else {
-        // 次の行にもチェックボックスを挿入
-        quill.insertText(range.index, '\n', Quill.sources.USER);
-        quill.insertEmbed(range.index + 1, 'checkbox', false, Quill.sources.USER);
-        quill.setSelection(range.index + 2, Quill.sources.SILENT);
-      }
-      return false;
-    }
-    return true;
   });
 
   loadNotes();
