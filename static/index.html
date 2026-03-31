@@ -4,80 +4,178 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>メモ帳</title>
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
-  header { background: #2c3e50; color: white; padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 1.2rem; flex: 1; }
-  #new-btn { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
-  #new-btn:hover { background: #2980b9; }
-  .container { display: flex; flex: 1; overflow: hidden; }
-  #sidebar { width: 260px; background: white; border-right: 1px solid #ddd; overflow-y: auto; }
-  .note-item { padding: 14px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
-  .note-item:hover { background: #f0f7ff; }
-  .note-item.active { background: #dbeafe; border-left: 3px solid #3498db; }
-  .note-item .note-title { font-weight: bold; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .note-item .note-date { font-size: 0.75rem; color: #999; margin-top: 4px; }
-  #editor { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 10px; }
-  #editor.hidden { display: none; }
-  #placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.1rem; }
-  #title-input { font-size: 1.4rem; border: none; border-bottom: 2px solid #ddd; padding: 8px 4px; outline: none; width: 100%; }
-  #title-input:focus { border-bottom-color: #3498db; }
-  #content-input { flex: 1; font-size: 1rem; border: 1px solid #ddd; border-radius: 4px; padding: 12px; outline: none; resize: none; line-height: 1.6; }
-  #content-input:focus { border-color: #3498db; }
-  .editor-actions { display: flex; gap: 8px; }
-  #save-btn { background: #27ae60; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; }
-  #save-btn:hover { background: #219a52; }
-  #delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; }
-  #delete-btn:hover { background: #c0392b; }
-  .empty { padding: 30px; color: #aaa; text-align: center; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; height: 100dvh; display: flex; overflow: hidden; }
 
-  /* Excel upload */
-  #upload-section { padding: 12px 16px; border-bottom: 1px solid #eee; }
-  #upload-section label { font-size: 0.8rem; color: #666; display: block; margin-bottom: 6px; }
-  #upload-form { display: flex; gap: 6px; }
-  #file-input { font-size: 0.8rem; flex: 1; min-width: 0; }
-  #upload-btn { background: #8e44ad; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
-  #upload-btn:hover { background: #7d3c98; }
-  #upload-msg { font-size: 0.75rem; margin-top: 4px; }
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 240px; min-width: 240px; background: #f7f7f5; display: flex;
+    flex-direction: column; border-right: 1px solid #e8e8e6;
+    transition: transform 0.25s ease; z-index: 100;
+  }
+  #sidebar-header { padding: 16px 12px 8px; display: flex; align-items: center; justify-content: space-between; }
+  #sidebar-title { font-size: 0.85rem; font-weight: 600; color: #888; letter-spacing: 0.05em; }
+  #new-btn {
+    display: flex; align-items: center; gap: 4px;
+    background: none; border: none; color: #555; cursor: pointer;
+    font-size: 0.85rem; padding: 4px 8px; border-radius: 4px;
+  }
+  #new-btn:hover { background: #e8e8e6; }
+  #note-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .note-item {
+    padding: 8px 14px; cursor: pointer; border-radius: 4px;
+    margin: 1px 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .note-item:hover { background: #e8e8e6; }
+  .note-item.active { background: #e3e3e0; }
+  .note-item .note-icon { font-size: 1rem; flex-shrink: 0; }
+  .note-item-info { overflow: hidden; }
+  .note-item .note-title { font-size: 0.875rem; color: #37352f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-item .note-date { font-size: 0.7rem; color: #999; margin-top: 2px; }
+  .empty { padding: 20px 14px; color: #aaa; font-size: 0.85rem; }
+
+  /* ── Main ── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-bottom: 1px solid #f0f0ee; min-height: 48px;
+  }
+  #menu-btn {
+    display: none; background: none; border: none; cursor: pointer;
+    font-size: 1.2rem; padding: 4px; color: #555; border-radius: 4px;
+  }
+  #menu-btn:hover { background: #f0f0ee; }
+  #save-status { font-size: 0.8rem; color: #aaa; margin-left: auto; }
+  #save-btn {
+    background: #2eaadc; color: white; border: none;
+    padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+  }
+  #save-btn:hover { background: #2799c5; }
+  #delete-btn {
+    background: none; border: 1px solid #e0e0de; color: #999;
+    padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+  }
+  #delete-btn:hover { background: #fff0f0; border-color: #e74c3c; color: #e74c3c; }
+
+  #editor-wrap { flex: 1; overflow-y: auto; padding: 40px max(40px, calc(50% - 360px)); }
+  #title-input {
+    width: 100%; border: none; outline: none; font-size: 2rem;
+    font-weight: 700; color: #37352f; margin-bottom: 20px;
+    line-height: 1.3; resize: none; background: transparent;
+    font-family: inherit;
+  }
+  #title-input::placeholder { color: #c8c7c3; }
+
+  /* Quill overrides */
+  .ql-container { border: none !important; font-size: 1rem; }
+  .ql-toolbar { border: none !important; border-bottom: 1px solid #f0f0ee !important; background: #fafaf9; }
+  .ql-editor { padding: 0 !important; min-height: 300px; color: #37352f; line-height: 1.75; }
+  .ql-editor p { margin-bottom: 4px; }
+  .ql-editor.ql-blank::before { color: #c8c7c3; font-style: normal; left: 0; }
+
+  #placeholder-screen {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #ccc; gap: 12px;
+  }
+  #placeholder-screen .ph-icon { font-size: 3rem; }
+  #placeholder-screen p { font-size: 0.95rem; }
+
+  /* ── Mobile overlay ── */
+  #overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.3); z-index: 90;
+  }
+
+  @media (max-width: 640px) {
+    #sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      transform: translateX(-100%);
+    }
+    #sidebar.open { transform: translateX(0); }
+    #menu-btn { display: block; }
+    #overlay.show { display: block; }
+    #editor-wrap { padding: 24px 20px; }
+    #title-input { font-size: 1.5rem; }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>メモ帳</h1>
-  <button id="new-btn" onclick="newNote()">+ 新規メモ</button>
-</header>
+<div id="overlay" onclick="closeSidebar()"></div>
 
-<div class="container">
-  <div id="sidebar">
-    <div id="upload-section">
-      <label>Excelアップロード</label>
-      <div id="upload-form">
-        <input type="file" id="file-input" accept=".xlsx,.xls">
-        <button id="upload-btn" onclick="uploadFile()">送信</button>
-      </div>
-      <div id="upload-msg"></div>
-    </div>
-    <div id="note-list"></div>
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <span id="sidebar-title">ページ</span>
+    <button id="new-btn" onclick="newNote()">＋ 新規</button>
+  </div>
+  <div id="note-list"></div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="topbar">
+    <button id="menu-btn" onclick="toggleSidebar()">☰</button>
+    <span id="save-status"></span>
+    <button id="save-btn" onclick="saveNote()" style="display:none">保存</button>
+    <button id="delete-btn" onclick="deleteNote()" style="display:none">削除</button>
   </div>
 
-  <div id="placeholder">メモを選ぶか、新規作成してください</div>
+  <div id="placeholder-screen">
+    <div class="ph-icon">📝</div>
+    <p>左のリストからページを選ぶか、新規作成してください</p>
+    <button id="new-btn2" onclick="newNote()" style="background:#2eaadc;color:white;border:none;padding:8px 18px;border-radius:4px;cursor:pointer;font-size:0.9rem;">＋ 新規ページ</button>
+  </div>
 
-  <div id="editor" class="hidden">
-    <input id="title-input" type="text" placeholder="タイトル">
-    <textarea id="content-input" placeholder="メモを入力..."></textarea>
-    <div class="editor-actions">
-      <button id="save-btn" onclick="saveNote()">保存</button>
-      <button id="delete-btn" onclick="deleteNote()">削除</button>
+  <div id="editor-area" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
+    <div id="toolbar">
+      <span class="ql-formats">
+        <select class="ql-header"><option value="1">見出し1</option><option value="2">見出し2</option><option value="3">見出し3</option><option selected>本文</option></select>
+      </span>
+      <span class="ql-formats">
+        <button class="ql-bold"></button>
+        <button class="ql-italic"></button>
+        <button class="ql-underline"></button>
+        <button class="ql-strike"></button>
+      </span>
+      <span class="ql-formats">
+        <button class="ql-list" value="ordered"></button>
+        <button class="ql-list" value="bullet"></button>
+      </span>
+      <span class="ql-formats">
+        <button class="ql-blockquote"></button>
+        <button class="ql-code-block"></button>
+      </span>
+      <span class="ql-formats">
+        <button class="ql-clean"></button>
+      </span>
+    </div>
+    <div id="editor-wrap">
+      <textarea id="title-input" placeholder="タイトルなし" rows="1" oninput="autoResize(this)"></textarea>
+      <div id="quill-editor"></div>
     </div>
   </div>
 </div>
 
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
 let notes = [];
 let currentId = null;
+let quill;
 
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  quill = new Quill('#quill-editor', {
+    theme: 'snow',
+    modules: { toolbar: '#toolbar' },
+    placeholder: '書き始めましょう…'
+  });
+  loadNotes();
+});
+
+// ── API ───────────────────────────────────────────────────────────────────────
 async function loadNotes() {
   const res = await fetch('/api/notes');
   notes = await res.json();
@@ -87,13 +185,16 @@ async function loadNotes() {
 function renderList() {
   const el = document.getElementById('note-list');
   if (notes.length === 0) {
-    el.innerHTML = '<div class="empty">メモがありません</div>';
+    el.innerHTML = '<div class="empty">ページがありません</div>';
     return;
   }
   el.innerHTML = notes.map(n => `
     <div class="note-item ${n.id === currentId ? 'active' : ''}" onclick="openNote('${n.id}')">
-      <div class="note-title">${escHtml(n.title)}</div>
-      <div class="note-date">${formatDate(n.updated_at)}</div>
+      <span class="note-icon">📄</span>
+      <div class="note-item-info">
+        <div class="note-title">${escHtml(n.title || 'タイトルなし')}</div>
+        <div class="note-date">${formatDate(n.updated_at)}</div>
+      </div>
     </div>
   `).join('');
 }
@@ -103,26 +204,28 @@ function openNote(id) {
   if (!note) return;
   currentId = id;
   document.getElementById('title-input').value = note.title;
-  document.getElementById('content-input').value = note.content;
-  document.getElementById('editor').classList.remove('hidden');
-  document.getElementById('placeholder').style.display = 'none';
+  autoResize(document.getElementById('title-input'));
+  try { quill.setContents(JSON.parse(note.content)); }
+  catch { quill.setText(note.content); }
+  showEditor();
   renderList();
+  closeSidebar();
 }
 
 function newNote() {
   currentId = null;
   document.getElementById('title-input').value = '';
-  document.getElementById('content-input').value = '';
-  document.getElementById('editor').classList.remove('hidden');
-  document.getElementById('placeholder').style.display = 'none';
-  document.getElementById('title-input').focus();
+  quill.setContents([]);
+  showEditor();
   renderList();
+  closeSidebar();
+  document.getElementById('title-input').focus();
 }
 
 async function saveNote() {
-  const title = document.getElementById('title-input').value.trim();
-  const content = document.getElementById('content-input').value;
-  if (!title) { alert('タイトルを入力してください'); return; }
+  const title = document.getElementById('title-input').value.trim() || 'タイトルなし';
+  const content = JSON.stringify(quill.getContents());
+  setStatus('保存中…');
 
   if (currentId) {
     await fetch(`/api/notes/${currentId}`, {
@@ -139,47 +242,73 @@ async function saveNote() {
     const data = await res.json();
     currentId = data.id;
   }
+  setStatus('保存済み ✓');
   await loadNotes();
+  setTimeout(() => setStatus(''), 2000);
 }
 
 async function deleteNote() {
   if (!currentId) return;
-  if (!confirm('このメモを削除しますか？')) return;
+  if (!confirm('このページを削除しますか？')) return;
   await fetch(`/api/notes/${currentId}`, {method: 'DELETE'});
   currentId = null;
-  document.getElementById('editor').classList.add('hidden');
-  document.getElementById('placeholder').style.display = '';
+  hideEditor();
   await loadNotes();
 }
 
-async function uploadFile() {
-  const fileInput = document.getElementById('file-input');
-  const msg = document.getElementById('upload-msg');
-  if (!fileInput.files[0]) { msg.textContent = 'ファイルを選択してください'; msg.style.color = 'red'; return; }
-  const form = new FormData();
-  form.append('file', fileInput.files[0]);
-  const res = await fetch('/api/upload', {method: 'POST', body: form});
-  const data = await res.json();
-  if (res.ok) {
-    msg.textContent = 'アップロード成功';
-    msg.style.color = 'green';
-    fileInput.value = '';
-  } else {
-    msg.textContent = data.detail || 'エラー';
-    msg.style.color = 'red';
-  }
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function showEditor() {
+  document.getElementById('placeholder-screen').style.display = 'none';
+  const ea = document.getElementById('editor-area');
+  ea.style.display = 'flex';
+  ea.style.flexDirection = 'column';
+  ea.style.flex = '1';
+  ea.style.overflow = 'hidden';
+  document.getElementById('save-btn').style.display = '';
+  document.getElementById('delete-btn').style.display = currentId ? '' : 'none';
+}
+
+function hideEditor() {
+  document.getElementById('placeholder-screen').style.display = '';
+  document.getElementById('editor-area').style.display = 'none';
+  document.getElementById('save-btn').style.display = 'none';
+  document.getElementById('delete-btn').style.display = 'none';
+}
+
+function setStatus(msg) {
+  document.getElementById('save-status').textContent = msg;
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function formatDate(iso) {
   const d = new Date(iso);
-  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-loadNotes();
+// Enterキーでタイトルからエディタへ移動
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('title-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); quill.focus(); }
+  });
+});
 </script>
 </body>
 </html>
