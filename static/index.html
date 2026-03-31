@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メモ帳</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+  header { background: #2c3e50; color: white; padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 1.2rem; flex: 1; }
+  #new-btn { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+  #new-btn:hover { background: #2980b9; }
+  .container { display: flex; flex: 1; overflow: hidden; }
+  #sidebar { width: 260px; background: white; border-right: 1px solid #ddd; overflow-y: auto; }
+  .note-item { padding: 14px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .note-item:hover { background: #f0f7ff; }
+  .note-item.active { background: #dbeafe; border-left: 3px solid #3498db; }
+  .note-item .note-title { font-weight: bold; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-item .note-date { font-size: 0.75rem; color: #999; margin-top: 4px; }
+  #editor { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 10px; }
+  #editor.hidden { display: none; }
+  #placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.1rem; }
+  #title-input { font-size: 1.4rem; border: none; border-bottom: 2px solid #ddd; padding: 8px 4px; outline: none; width: 100%; }
+  #title-input:focus { border-bottom-color: #3498db; }
+  #content-input { flex: 1; font-size: 1rem; border: 1px solid #ddd; border-radius: 4px; padding: 12px; outline: none; resize: none; line-height: 1.6; }
+  #content-input:focus { border-color: #3498db; }
+  .editor-actions { display: flex; gap: 8px; }
+  #save-btn { background: #27ae60; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; }
+  #save-btn:hover { background: #219a52; }
+  #delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; }
+  #delete-btn:hover { background: #c0392b; }
+  .empty { padding: 30px; color: #aaa; text-align: center; }
+
+  /* Excel upload */
+  #upload-section { padding: 12px 16px; border-bottom: 1px solid #eee; }
+  #upload-section label { font-size: 0.8rem; color: #666; display: block; margin-bottom: 6px; }
+  #upload-form { display: flex; gap: 6px; }
+  #file-input { font-size: 0.8rem; flex: 1; min-width: 0; }
+  #upload-btn { background: #8e44ad; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+  #upload-btn:hover { background: #7d3c98; }
+  #upload-msg { font-size: 0.75rem; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>メモ帳</h1>
+  <button id="new-btn" onclick="newNote()">+ 新規メモ</button>
+</header>
+
+<div class="container">
+  <div id="sidebar">
+    <div id="upload-section">
+      <label>Excelアップロード</label>
+      <div id="upload-form">
+        <input type="file" id="file-input" accept=".xlsx,.xls">
+        <button id="upload-btn" onclick="uploadFile()">送信</button>
+      </div>
+      <div id="upload-msg"></div>
+    </div>
+    <div id="note-list"></div>
+  </div>
+
+  <div id="placeholder">メモを選ぶか、新規作成してください</div>
+
+  <div id="editor" class="hidden">
+    <input id="title-input" type="text" placeholder="タイトル">
+    <textarea id="content-input" placeholder="メモを入力..."></textarea>
+    <div class="editor-actions">
+      <button id="save-btn" onclick="saveNote()">保存</button>
+      <button id="delete-btn" onclick="deleteNote()">削除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let notes = [];
+let currentId = null;
+
+async function loadNotes() {
+  const res = await fetch('/api/notes');
+  notes = await res.json();
+  renderList();
+}
+
+function renderList() {
+  const el = document.getElementById('note-list');
+  if (notes.length === 0) {
+    el.innerHTML = '<div class="empty">メモがありません</div>';
+    return;
+  }
+  el.innerHTML = notes.map(n => `
+    <div class="note-item ${n.id === currentId ? 'active' : ''}" onclick="openNote('${n.id}')">
+      <div class="note-title">${escHtml(n.title)}</div>
+      <div class="note-date">${formatDate(n.updated_at)}</div>
+    </div>
+  `).join('');
+}
+
+function openNote(id) {
+  const note = notes.find(n => n.id === id);
+  if (!note) return;
+  currentId = id;
+  document.getElementById('title-input').value = note.title;
+  document.getElementById('content-input').value = note.content;
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('placeholder').style.display = 'none';
+  renderList();
+}
+
+function newNote() {
+  currentId = null;
+  document.getElementById('title-input').value = '';
+  document.getElementById('content-input').value = '';
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('title-input').focus();
+  renderList();
+}
+
+async function saveNote() {
+  const title = document.getElementById('title-input').value.trim();
+  const content = document.getElementById('content-input').value;
+  if (!title) { alert('タイトルを入力してください'); return; }
+
+  if (currentId) {
+    await fetch(`/api/notes/${currentId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, content})
+    });
+  } else {
+    const res = await fetch('/api/notes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, content})
+    });
+    const data = await res.json();
+    currentId = data.id;
+  }
+  await loadNotes();
+}
+
+async function deleteNote() {
+  if (!currentId) return;
+  if (!confirm('このメモを削除しますか？')) return;
+  await fetch(`/api/notes/${currentId}`, {method: 'DELETE'});
+  currentId = null;
+  document.getElementById('editor').classList.add('hidden');
+  document.getElementById('placeholder').style.display = '';
+  await loadNotes();
+}
+
+async function uploadFile() {
+  const fileInput = document.getElementById('file-input');
+  const msg = document.getElementById('upload-msg');
+  if (!fileInput.files[0]) { msg.textContent = 'ファイルを選択してください'; msg.style.color = 'red'; return; }
+  const form = new FormData();
+  form.append('file', fileInput.files[0]);
+  const res = await fetch('/api/upload', {method: 'POST', body: form});
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = 'アップロード成功';
+    msg.style.color = 'green';
+    fileInput.value = '';
+  } else {
+    msg.textContent = data.detail || 'エラー';
+    msg.style.color = 'red';
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+loadNotes();
+</script>
+</body>
+</html>
