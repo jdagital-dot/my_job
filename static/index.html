@@ -284,6 +284,11 @@ window.addEventListener('DOMContentLoaded', () => {
   quill.on('text-change', scheduleAutoSave);
   document.getElementById('title-input').addEventListener('input', scheduleAutoSave);
 
+  // mousedownでフォーカス移動を防ぐ（IME二重入力バグ対策）
+  quill.root.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('ql-cb')) e.preventDefault();
+  });
+
   // チェックボックスのクリックでON/OFF切り替え
   quill.root.addEventListener('click', e => {
     if (e.target.classList.contains('ql-cb')) {
