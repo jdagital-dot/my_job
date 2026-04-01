@@ -284,12 +284,13 @@ window.addEventListener('DOMContentLoaded', () => {
   quill.on('text-change', scheduleAutoSave);
   document.getElementById('title-input').addEventListener('input', scheduleAutoSave);
 
-  // チェックボックスのクリックでON/OFF切り替え
-  quill.root.addEventListener('click', e => {
-    if (e.target.classList.contains('ql-cb')) {
-      const checked = e.target.dataset.checked === 'true';
-      e.target.dataset.checked = String(!checked);
-      e.target.textContent = checked ? '☐' : '☑';
+  // チェックボックスのON/OFF切り替え（Quill 2はclickをキャンセルするためpointerupを使用）
+  quill.root.addEventListener('pointerup', e => {
+    const cb = e.target.closest('.ql-cb');
+    if (cb) {
+      const checked = cb.dataset.checked === 'true';
+      cb.dataset.checked = String(!checked);
+      cb.textContent = checked ? '☐' : '☑';
       scheduleAutoSave();
     }
   });
