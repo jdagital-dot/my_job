@@ -379,7 +379,7 @@ async function saveNote() {
         method: 'PUT', headers, body: JSON.stringify({title, content})
       });
       const note = notes.find(n => n.id === currentId);
-      if (note) { note.title = title; note.updated_at = new Date().toISOString(); }
+      if (note) { note.title = title; note.content = content; note.updated_at = new Date().toISOString(); }
     } else {
       const res = await fetch('/api/notes', {
         method: 'POST', headers, body: JSON.stringify({title, content})
