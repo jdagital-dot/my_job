@@ -286,7 +286,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // mousedownでフォーカス移動を防ぐ（IME二重入力バグ対策）
   quill.root.addEventListener('mousedown', e => {
-    if (e.target.classList.contains('ql-cb')) e.preventDefault();
+    if (e.target.classList.contains('ql-cb')) {
+      e.preventDefault();
+      // クリック完了後にカーソルをチェックボックスの直後へ移動
+      const blot = Quill.find(e.target);
+      if (blot) {
+        const index = quill.getIndex(blot) + 1;
+        setTimeout(() => quill.setSelection(index, 0, Quill.sources.USER), 0);
+      }
+    }
   });
 
   // チェックボックスのクリックでON/OFF切り替え
