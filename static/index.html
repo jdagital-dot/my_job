@@ -294,6 +294,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  document.getElementById('title-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); quill.focus(); }
+  });
+
   loadNotes();
 });
 
@@ -307,7 +311,6 @@ function insertCheckbox() {
 
 function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
-  setStatus('保存中...');
   autoSaveTimer = setTimeout(saveNote, 1000);
 }
 
@@ -366,27 +369,29 @@ function newNote() {
 async function saveNote() {
   const title = document.getElementById('title-input').value.trim() || 'タイトルなし';
   const content = JSON.stringify(quill.getContents());
-  
+  const headers = {'Content-Type': 'application/json'};
+
   try {
+    setStatus('保存中...');
     if (currentId) {
       await fetch('/api/notes/' + currentId, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title, content})
+        method: 'PUT', headers, body: JSON.stringify({title, content})
       });
+      const note = notes.find(n => n.id === currentId);
+      if (note) { note.title = title; note.updated_at = new Date().toISOString(); }
     } else {
       const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title, content})
+        method: 'POST', headers, body: JSON.stringify({title, content})
       });
-      if(res.ok){
-          const data = await res.json();
-          currentId = data.id;
+      if (res.ok) {
+        const data = await res.json();
+        currentId = data.id;
+        notes.unshift(data);
+        document.getElementById('delete-btn').style.display = 'flex';
       }
     }
+    renderList();
     setStatus('保存しました');
-    await loadNotes();
     setTimeout(() => setStatus(''), 2000);
   } catch(e) { console.error(e); setStatus('保存エラー'); }
 }
@@ -444,11 +449,6 @@ function formatDate(iso) {
   return `${month}/${day} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('title-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); quill.focus(); }
-  });
-});
 </script>
 </body>
 </html>

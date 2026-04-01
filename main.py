@@ -44,14 +44,9 @@ init_db()
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
-class NoteCreate(BaseModel):
+class NoteSchema(BaseModel):
     title: str
     content: str = ""
-
-
-class NoteUpdate(BaseModel):
-    title: str
-    content: str
 
 
 # ── Note API ──────────────────────────────────────────────────────────────────
@@ -66,29 +61,31 @@ def list_notes():
 
 
 @app.post("/api/notes", status_code=201)
-def create_note(note: NoteCreate):
+def create_note(note: NoteSchema):
     now = datetime.now().isoformat()
     note_id = str(uuid.uuid4())
+    title = note.title.strip()
     with get_db() as con:
         con.execute(
             "INSERT INTO notes VALUES (?, ?, ?, ?, ?)",
-            (note_id, note.title.strip(), note.content, now, now),
+            (note_id, title, note.content, now, now),
         )
-    return {"id": note_id, "title": note.title, "content": note.content,
+    return {"id": note_id, "title": title, "content": note.content,
             "created_at": now, "updated_at": now}
 
 
 @app.put("/api/notes/{note_id}")
-def update_note(note_id: str, note: NoteUpdate):
+def update_note(note_id: str, note: NoteSchema):
     now = datetime.now().isoformat()
+    title = note.title.strip()
     with get_db() as con:
         cur = con.execute(
             "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=?",
-            (note.title.strip(), note.content, now, note_id),
+            (title, note.content, now, note_id),
         )
     if cur.rowcount == 0:
         raise HTTPException(status_code=404, detail="メモが見つかりません")
-    return {"id": note_id, "title": note.title, "content": note.content,
+    return {"id": note_id, "title": title, "content": note.content,
             "updated_at": now}
 
 
@@ -123,6 +120,10 @@ async def upload_excel(file: UploadFile = File(...)):
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 
+_HTML = Path("static/index.html").read_text()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return HTMLResponse(open("static/index.html").read())
+    return HTMLResponse(_HTML)
+
