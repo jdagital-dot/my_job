@@ -22,18 +22,12 @@ export default function App() {
   const pendingContentRef = useRef(null)
   const saveTimerRef = useRef(null)
   const isSavingRef = useRef(false)
-  const noteInitDoneRef = useRef(false)
 
   useEffect(() => { currentNoteIdRef.current = currentNoteId }, [currentNoteId])
 
   const currentNote = notes.find(n => n.id === currentNoteId) ?? null
 
-  // Reset init flag on user change
-  useEffect(() => {
-    if (!user) noteInitDoneRef.current = false
-  }, [user?.uid])
-
-  // On notes loaded: restore last note or create new one
+  // On notes loaded: restore last note, or wait then create new one
   useEffect(() => {
     if (notesLoading || !user) return
 
@@ -43,22 +37,21 @@ export default function App() {
     const lastId = localStorage.getItem(LAST_NOTE_KEY)
     if (lastId && notes.find(n => n.id === lastId)) {
       setCurrentNoteId(lastId)
-      noteInitDoneRef.current = true
       return
     }
     if (notes.length > 0) {
       setCurrentNoteId(notes[0].id)
-      noteInitDoneRef.current = true
       return
     }
-    // Only create a blank note once (guard against empty-cache false trigger)
-    if (!noteInitDoneRef.current) {
-      noteInitDoneRef.current = true
+
+    // Notes are empty — wait 2s for Firestore before creating a blank note
+    const timer = setTimeout(() => {
       createNote().then(id => {
         setCurrentNoteId(id)
         localStorage.setItem(LAST_NOTE_KEY, id)
       })
-    }
+    }, 2000)
+    return () => clearTimeout(timer)
   }, [notesLoading, user?.uid, notes.length])
 
   useEffect(() => {
