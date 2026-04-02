@@ -171,12 +171,14 @@ body {
 
 /* ── Bottom Toolbar ── */
 .bottom-toolbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
   display: flex; align-items: center;
   padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.96);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(0,0,0,0.06);
-  flex-shrink: 0; gap: 2px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  z-index: 70; gap: 2px;
 }
 .tb-btn {
   background: none; border: none; cursor: pointer;
@@ -207,7 +209,7 @@ body {
 .ql-toolbar.ql-snow { display: none; }
 .ql-editor {
   flex: 1; font-size: 1.1rem; line-height: 1.85; color: #111;
-  padding: 40px max(24px, calc(50% - 360px)) 120px !important;
+  padding: 40px max(24px, calc(50% - 360px)) calc(80px + env(safe-area-inset-bottom)) !important;
   font-family: inherit;
 }
 .ql-editor p { margin-bottom: 0.6em; }
