@@ -10,7 +10,7 @@ const SAVE_DELAY = 1500
 
 export default function App() {
   const { user, loading: authLoading, signIn, signOut } = useAuth()
-  const { notes, loading: notesLoading, createNote, updateNote, deleteNote } = useNotes(user?.uid)
+  const { notes, loading: notesLoading, firestoreOk, createNote, updateNote, deleteNote } = useNotes(user?.uid)
 
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -152,6 +152,11 @@ export default function App() {
       />
 
       <div className="main">
+        {!firestoreOk && (
+          <div className="firestore-warn">
+            ⚠️ クラウド同期が無効です（このデバイスにのみ保存）。Firebase Firestoreを有効にしてください。
+          </div>
+        )}
         <header className="topbar">
           <button className="icon-btn" onClick={() => setSidebarOpen(v => !v)} aria-label="メニュー">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
