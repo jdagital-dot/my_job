@@ -22,26 +22,44 @@ export default function App() {
   const pendingContentRef = useRef(null)
   const saveTimerRef = useRef(null)
   const isSavingRef = useRef(false)
+  const noteInitDoneRef = useRef(false)
 
   useEffect(() => { currentNoteIdRef.current = currentNoteId }, [currentNoteId])
 
   const currentNote = notes.find(n => n.id === currentNoteId) ?? null
 
+  // Reset init flag on user change
+  useEffect(() => {
+    if (!user) noteInitDoneRef.current = false
+  }, [user?.uid])
+
   // On notes loaded: restore last note or create new one
   useEffect(() => {
     if (notesLoading || !user) return
+
+    // Already on a valid note — nothing to do
+    if (currentNoteId && notes.find(n => n.id === currentNoteId)) return
+
     const lastId = localStorage.getItem(LAST_NOTE_KEY)
     if (lastId && notes.find(n => n.id === lastId)) {
       setCurrentNoteId(lastId)
-    } else if (notes.length > 0) {
+      noteInitDoneRef.current = true
+      return
+    }
+    if (notes.length > 0) {
       setCurrentNoteId(notes[0].id)
-    } else {
+      noteInitDoneRef.current = true
+      return
+    }
+    // Only create a blank note once (guard against empty-cache false trigger)
+    if (!noteInitDoneRef.current) {
+      noteInitDoneRef.current = true
       createNote().then(id => {
         setCurrentNoteId(id)
         localStorage.setItem(LAST_NOTE_KEY, id)
       })
     }
-  }, [notesLoading, user?.uid])
+  }, [notesLoading, user?.uid, notes.length])
 
   useEffect(() => {
     if (currentNoteId) localStorage.setItem(LAST_NOTE_KEY, currentNoteId)
