@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db } from './firebase'
 import {
-  collection, query, where, orderBy, onSnapshot,
+  collection, query, where, onSnapshot,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 } from 'firebase/firestore'
 
@@ -24,13 +24,18 @@ export function useNotes(userId) {
 
     const q = query(
       collection(db, 'notes'),
-      where('userId', '==', userId),
-      orderBy('updatedAt', 'desc')
+      where('userId', '==', userId)
     )
 
     const unsubscribe = onSnapshot(q,
       (snap) => {
-        const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const fetched = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const ta = a.updatedAt?.toMillis?.() ?? new Date(a.updatedAt).getTime()
+            const tb = b.updatedAt?.toMillis?.() ?? new Date(b.updatedAt).getTime()
+            return tb - ta
+          })
         setNotes(fetched)
         saveLocal(fetched)
         setFirestoreOk(true)
