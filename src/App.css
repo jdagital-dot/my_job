@@ -169,23 +169,28 @@ body {
 }
 .icon-btn:hover { background: rgba(0,0,0,0.04); transform: scale(1.05); color: #000; }
 
-/* ── Toolbar ── */
-.toolbar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 8px 20px; border-bottom: 1px solid rgba(0,0,0,0.02);
-  flex-shrink: 0; overflow-x: auto; scrollbar-width: none;
+/* ── Bottom Toolbar ── */
+.bottom-toolbar {
+  display: flex; align-items: center;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  flex-shrink: 0; gap: 2px;
 }
-.toolbar::-webkit-scrollbar { display: none; }
-.toolbar button {
+.tb-btn {
   background: none; border: none; cursor: pointer;
-  padding: 8px 12px; border-radius: 10px;
-  font-size: 0.9rem; font-weight: 600; font-family: inherit; color: #666;
-  min-width: 38px; transition: all 0.2s;
+  width: 44px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.95rem; font-weight: 700; font-family: inherit; color: #555;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
-.toolbar button:hover { background: rgba(0,0,0,0.04); color: #111; }
-.toolbar .ql-bold { font-weight: 700; font-family: serif; font-size: 1.1rem; }
-.toolbar .preview-btn { margin-left: auto; color: #888; font-size: 0.8rem; }
-.toolbar .preview-btn.active { background: #111; color: #fff; }
+.tb-btn:hover, .tb-btn:active { background: rgba(0,0,0,0.06); color: #111; }
+.tb-btn.ql-active { background: #111; color: #fff; border-radius: 8px; }
+.tb-divider { flex: 1; }
+.tb-preview { color: #888; }
+.tb-preview.active { background: #111; color: #fff; }
 
 /* ── Editor Area ── */
 .editor-area {

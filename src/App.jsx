@@ -187,17 +187,6 @@ export default function App() {
           </button>
         </header>
 
-        {/* Custom Quill toolbar */}
-        <div id="qm-toolbar" className="toolbar">
-          <button className="ql-bold" title="太字"><b>B</b></button>
-          <button onClick={() => editorRef.current?.insertCheckbox()} title="チェックボックス">☑</button>
-          <button className="ql-list" value="bullet" title="箇条書き">—</button>
-          <button
-            className={`preview-btn${preview ? ' active' : ''}`}
-            onClick={() => setPreview(v => !v)}
-          >{preview ? '編集' : 'プレビュー'}</button>
-        </div>
-
         <div className="editor-area">
           {currentNote ? (
             <>
@@ -225,6 +214,36 @@ export default function App() {
           ) : (
             <div className="loading">読み込み中...</div>
           )}
+        </div>
+        {/* Bottom toolbar */}
+        <div id="qm-toolbar" className="bottom-toolbar">
+          <button className="ql-bold tb-btn" title="太字">
+            <b>B</b>
+          </button>
+          <button className="ql-header tb-btn" value="1" title="見出し">
+            H1
+          </button>
+          <button className="ql-list tb-btn" value="bullet" title="箇条書き">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button className="ql-list tb-btn" value="ordered" title="番号リスト">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="2" y="8" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">1.</text><text x="2" y="14" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">2.</text><text x="2" y="20" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">3.</text></svg>
+          </button>
+          <button className="tb-btn" onClick={() => editorRef.current?.insertCheckbox()} title="チェックボックス">
+            ☑
+          </button>
+          <div className="tb-divider" />
+          <button
+            className={`tb-btn tb-preview${preview ? ' active' : ''}`}
+            onClick={() => setPreview(v => !v)}
+            title={preview ? '編集モード' : 'プレビュー'}
+          >
+            {preview ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            )}
+          </button>
         </div>
       </div>
     </div>
