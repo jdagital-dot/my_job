@@ -22,8 +22,25 @@ export default function App() {
   const pendingContentRef = useRef(null)
   const saveTimerRef = useRef(null)
   const isSavingRef = useRef(false)
+  const toolbarRef = useRef(null)
 
   useEffect(() => { currentNoteIdRef.current = currentNoteId }, [currentNoteId])
+
+  // iOS PWA: keep toolbar above keyboard using visualViewport
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv || !toolbarRef.current) return
+    const update = () => {
+      const offset = window.innerHeight - vv.height - vv.pageTop
+      toolbarRef.current.style.bottom = `${Math.max(0, offset)}px`
+    }
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
 
   const currentNote = notes.find(n => n.id === currentNoteId) ?? null
 
@@ -216,7 +233,7 @@ export default function App() {
           )}
         </div>
         {/* Bottom toolbar */}
-        <div id="qm-toolbar" className="bottom-toolbar">
+        <div id="qm-toolbar" className="bottom-toolbar" ref={toolbarRef}>
           <button className="ql-bold tb-btn" title="太字">
             <b>B</b>
           </button>
