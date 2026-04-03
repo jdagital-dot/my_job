@@ -29,18 +29,22 @@ export default function App() {
   // iOS PWA: keep toolbar above keyboard using visualViewport
   useEffect(() => {
     const vv = window.visualViewport
-    if (!vv || !toolbarRef.current) return
+    const toolbar = toolbarRef.current
+    if (!vv || !toolbar) return
+
     const update = () => {
-      const offset = window.innerHeight - vv.height - vv.pageTop
-      toolbarRef.current.style.bottom = `${Math.max(0, offset)}px`
+      const bottomOffset = window.innerHeight - vv.offsetTop - vv.height
+      toolbar.style.bottom = `${Math.max(0, bottomOffset)}px`
     }
+
+    update()
     vv.addEventListener('resize', update)
     vv.addEventListener('scroll', update)
     return () => {
       vv.removeEventListener('resize', update)
       vv.removeEventListener('scroll', update)
     }
-  }, [])
+  }, [user])
 
   const currentNote = notes.find(n => n.id === currentNoteId) ?? null
 
