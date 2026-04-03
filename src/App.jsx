@@ -19,6 +19,23 @@ export default function App() {
 
   const editorRef = useRef(null)
   const currentNoteIdRef = useRef(currentNoteId)
+
+  // Keep bottom toolbar above virtual keyboard using visualViewport API
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      const offset = Math.max(0, window.innerHeight - vv.offsetTop - vv.height)
+      document.documentElement.style.setProperty('--keyboard-height', `${offset}px`)
+    }
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+      document.documentElement.style.removeProperty('--keyboard-height')
+    }
+  }, [])
   const pendingContentRef = useRef(null)
   const saveTimerRef = useRef(null)
   const isSavingRef = useRef(false)

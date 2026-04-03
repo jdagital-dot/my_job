@@ -177,6 +177,10 @@ body {
   border-top: 1px solid rgba(0,0,0,0.08);
   flex-shrink: 0; gap: 2px;
   min-height: 52px;
+  position: fixed;
+  bottom: var(--keyboard-height, 0px);
+  left: 0; right: 0;
+  z-index: 50;
 }
 .tb-btn {
   background: none; border: none; cursor: pointer;
@@ -209,6 +213,7 @@ body {
 .ql-editor {
   flex: 1; font-size: 1.1rem; line-height: 1.85; color: #111;
   padding: 40px max(24px, calc(50% - 360px)) calc(80px + env(safe-area-inset-bottom)) !important;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom) + var(--keyboard-height, 0px)) !important;
   font-family: inherit;
 }
 .ql-editor p { margin-bottom: 0.6em; }
