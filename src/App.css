@@ -52,7 +52,6 @@ body {
 .app {
   display: flex; height: 100dvh; overflow: hidden; position: relative; background: #fff;
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* ── Overlay ── */
@@ -171,14 +170,13 @@ body {
 
 /* ── Bottom Toolbar ── */
 .bottom-toolbar {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
   display: flex; align-items: center;
-  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,0.96);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: 6px 12px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  background: #fff;
   border-top: 1px solid rgba(0,0,0,0.08);
-  z-index: 70; gap: 2px;
+  flex-shrink: 0; gap: 2px;
+  min-height: 52px;
 }
 .tb-btn {
   background: none; border: none; cursor: pointer;
