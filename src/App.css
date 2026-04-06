@@ -247,3 +247,12 @@ body {
   .topbar { padding: 0 12px; }
   .app-name { font-size: 1rem; }
 }
+
+/* ── Electron ドラッグ領域 ── */
+.topbar {
+  -webkit-app-region: drag;
+}
+.topbar button,
+.topbar .save-status {
+  -webkit-app-region: no-drag;
+}

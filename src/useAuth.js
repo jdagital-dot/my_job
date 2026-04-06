@@ -16,6 +16,10 @@ export function useAuth() {
   }, [])
 
   const signIn = () => {
+    // Electron 環境では常に signInWithPopup を使う
+    if (typeof window !== 'undefined' && window.electron?.isElectron) {
+      return signInWithPopup(auth, googleProvider)
+    }
     const ua = navigator.userAgent
     const isWebView = /wv|WebView/.test(ua) ||
       (ua.includes('iPhone') && !ua.includes('Safari')) ||
