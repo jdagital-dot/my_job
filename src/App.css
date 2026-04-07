@@ -255,6 +255,11 @@ body {
   background-repeat: no-repeat;
   background-position: center;
 }
+.ql-editor li[data-list="checked"] {
+  text-decoration: line-through;
+  text-decoration-color: #bbb;
+  color: #aaa;
+}
 
 /* ── Preview ── */
 .preview-area {
