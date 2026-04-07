@@ -28,7 +28,7 @@ export function useNotes(userId) {
     )
 
     const unsubscribe = onSnapshot(q,
-      (snap) => {
+      async (snap) => {
         const fetched = snap.docs
           .map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => {
@@ -36,6 +36,26 @@ export function useNotes(userId) {
             const tb = b.updatedAt?.toMillis?.() ?? new Date(b.updatedAt).getTime()
             return tb - ta
           })
+
+        // ローカルのみのメモを Firestore に移行（初回のみ）
+        if (snap.empty) {
+          const localNotes = loadLocal().filter(n => n.id.startsWith('local_'))
+          for (const n of localNotes) {
+            try {
+              await addDoc(collection(db, 'notes'), {
+                userId,
+                title: n.title ?? '無題',
+                content: n.content ?? '',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })
+            } catch (e) {
+              console.warn('Migration failed for note:', n.id, e)
+            }
+          }
+          if (localNotes.length > 0) return // onSnapshot が再発火して fetched に入る
+        }
+
         setNotes(fetched)
         saveLocal(fetched)
         setFirestoreOk(true)
