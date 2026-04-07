@@ -35,6 +35,21 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
       onChangeRef.current(JSON.stringify(quill.getContents()))
     })
 
+    // チェックボックスのクリックトグル
+    quill.root.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-list]')
+      if (!li) return
+      const listType = li.dataset.list
+      if (listType !== 'checked' && listType !== 'unchecked') return
+      // クリックがチェックボックス領域（左端 30px 以内）かを判定
+      const rect = li.getBoundingClientRect()
+      if (e.clientX - rect.left > 30) return
+      const index = quill.getIndex(Quill.find(li))
+      const newValue = listType === 'checked' ? 'unchecked' : 'checked'
+      quill.formatLine(index, 1, 'list', newValue, Quill.sources.USER)
+      e.preventDefault()
+    })
+
     quillRef.current = quill
   }, [])
 
