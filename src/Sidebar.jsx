@@ -38,7 +38,10 @@ export default function Sidebar({ open, notes, currentNoteId, onSelect, onNew, o
             key={n.id}
             className={`note-item${n.id === currentNoteId ? ' active' : ''}`}
             onClick={() => onSelect(n.id)}
-            role="listitem"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(n.id) } }}
+            role="button"
+            tabIndex={0}
+            aria-pressed={n.id === currentNoteId}
           >
             <span className="note-icon"><NoteIcon /></span>
             <div className="note-info">

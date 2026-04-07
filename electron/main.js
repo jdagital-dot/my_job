@@ -3,8 +3,6 @@ const path = require('path')
 const http = require('http')
 const fs = require('fs')
 
-const PROD_PORT = 4173
-
 function startLocalServer(distDir) {
   const mimeTypes = {
     '.html': 'text/html',
@@ -34,22 +32,25 @@ function startLocalServer(distDir) {
       })
     })
     server.on('error', (err) => reject(err))
-    server.listen(PROD_PORT, '127.0.0.1', () => resolve(server))
+    // ポート 0 でOSに空きポートを自動割り当てさせる
+    server.listen(0, '127.0.0.1', () => {
+      resolve(server.address().port)
+    })
   })
 }
 
 async function createWindow() {
   const isDev = !app.isPackaged
 
-  let port = PROD_PORT
+  let port = 5173
   if (!isDev) {
     const distDir = path.join(__dirname, '../dist')
     try {
-      await startLocalServer(distDir)
+      port = await startLocalServer(distDir)
     } catch (err) {
       dialog.showErrorBox(
         'QuickMemo 起動エラー',
-        `ポート ${PROD_PORT} が使用中のため起動できませんでした。\n他のアプリを終了してから再起動してください。\n\n詳細: ${err.message}`
+        `サーバーを起動できませんでした。再起動してください。\n\n詳細: ${err.message}`
       )
       app.quit()
       return
