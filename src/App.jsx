@@ -149,7 +149,14 @@ export default function App() {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <div className="login-logo">📝</div>
+          <div className="login-logo">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
           <h1>QuickMemo</h1>
           <p>起動後すぐにメモを取れる、シンプルなメモアプリ</p>
           {authError && <p className="auth-error">{authError}</p>}
@@ -197,7 +204,7 @@ export default function App() {
             {saveStatus === 'saving' && <span className="status-saving">● 保存中</span>}
             {saveStatus === 'saved'  && <span className="status-saved">● 保存済</span>}
           </div>
-          <button className="icon-btn" onClick={signOut} title="サインアウト">
+          <button className="icon-btn" onClick={signOut} aria-label="サインアウト">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -234,27 +241,28 @@ export default function App() {
           )}
         </div>
         {/* Bottom toolbar */}
-        <div id="qm-toolbar" className="bottom-toolbar">
-          <button className="ql-bold tb-btn" title="太字">
+        <div id="qm-toolbar" className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
+          <button className="ql-bold tb-btn" aria-label="太字">
             <b>B</b>
           </button>
-          <button className="ql-header tb-btn" value="1" title="見出し">
+          <button className="ql-header tb-btn" value="1" aria-label="見出し">
             H1
           </button>
-          <button className="ql-list tb-btn" value="bullet" title="箇条書き">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+          <button className="ql-list tb-btn" value="bullet" aria-label="箇条書き">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
           </button>
-          <button className="ql-list tb-btn" value="ordered" title="番号リスト">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="2" y="8" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">1.</text><text x="2" y="14" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">2.</text><text x="2" y="20" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">3.</text></svg>
+          <button className="ql-list tb-btn" value="ordered" aria-label="番号リスト">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="2" y="8" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">1.</text><text x="2" y="14" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">2.</text><text x="2" y="20" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">3.</text></svg>
           </button>
-          <button className="tb-btn" onClick={() => editorRef.current?.insertCheckbox()} title="チェックボックス">
-            ☑
+          <button className="tb-btn" onClick={() => editorRef.current?.insertCheckbox()} aria-label="チェックボックス">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 20 6"/></svg>
           </button>
           <div className="tb-divider" />
           <button
             className={`tb-btn tb-preview${preview ? ' active' : ''}`}
             onClick={() => setPreview(v => !v)}
-            title={preview ? '編集モード' : 'プレビュー'}
+            aria-label={preview ? '編集モード' : 'プレビュー'}
+            aria-pressed={preview}
           >
             {preview ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
