@@ -230,31 +230,21 @@ body {
 .ql-editor.ql-blank::before { color: #d1d1d1; font-style: normal; cursor: text; }
 
 /* ── Quill ToDoリスト ── */
-.ql-editor li[data-list="unchecked"],
-.ql-editor li[data-list="checked"] {
-  padding-left: 0.5em;
-}
-.ql-editor li[data-list="unchecked"]::before {
-  content: '';
-  display: inline-block;
+/* Quill 2.x は .ql-ui 要素でチェックボックスを描画するためそちらをカスタマイズ */
+.ql-editor li[data-list="unchecked"] > .ql-ui,
+.ql-editor li[data-list="checked"] > .ql-ui {
   width: 16px; height: 16px;
-  border: 1.5px solid #bbb;
   border-radius: 4px;
   margin-right: 8px;
-  vertical-align: -3px;
   flex-shrink: 0;
-  transition: border-color 0.15s;
 }
-.ql-editor li[data-list="checked"]::before {
-  content: '';
-  display: inline-block;
-  width: 16px; height: 16px;
+.ql-editor li[data-list="unchecked"] > .ql-ui {
+  border: 1.5px solid #bbb;
+  background: transparent;
+}
+.ql-editor li[data-list="checked"] > .ql-ui {
   background: #111;
   border: 1.5px solid #111;
-  border-radius: 4px;
-  margin-right: 8px;
-  vertical-align: -3px;
-  flex-shrink: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpolyline points='2,6 5,9 10,3' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: 12px 12px;
   background-repeat: no-repeat;
