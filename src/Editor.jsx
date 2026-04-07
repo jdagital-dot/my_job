@@ -2,6 +2,40 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
+// 旧形式 {"insert":{"checkbox":true/false}} を Quill ネイティブの list: unchecked/checked に変換
+function migrateLegacyCheckbox(ops) {
+  if (!Array.isArray(ops)) return ops
+  const result = []
+  let i = 0
+  while (i < ops.length) {
+    const op = ops[i]
+    if (op.insert && typeof op.insert === 'object' && 'checkbox' in op.insert) {
+      const listType = op.insert.checkbox ? 'checked' : 'unchecked'
+      // 次の op がテキスト（改行を含む行）なら結合
+      const next = ops[i + 1]
+      if (next && typeof next.insert === 'string') {
+        const text = next.insert
+        const nlIdx = text.indexOf('\n')
+        if (nlIdx !== -1) {
+          // 改行より前のテキスト
+          const before = text.slice(0, nlIdx + 1)
+          const after = text.slice(nlIdx + 1)
+          result.push({ insert: before, attributes: { ...(next.attributes ?? {}), list: listType } })
+          if (after) result.push({ insert: after, ...(next.attributes ? { attributes: next.attributes } : {}) })
+          i += 2
+          continue
+        }
+      }
+      // 対応する行 op がない場合はスキップ
+      i++
+      continue
+    }
+    result.push(op)
+    i++
+  }
+  return result
+}
+
 const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
@@ -39,7 +73,8 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
     if (!quill || content == null) return
     try {
       const delta = JSON.parse(content)
-      quill.setContents(delta.ops ?? delta, Quill.sources.SILENT)
+      const ops = migrateLegacyCheckbox(delta.ops ?? delta)
+      quill.setContents(ops, Quill.sources.SILENT)
     } catch {
       quill.setText(content, Quill.sources.SILENT)
     }
