@@ -230,10 +230,10 @@ body {
 .ql-editor.ql-blank::before { color: #d1d1d1; font-style: normal; cursor: text; }
 
 /* ── Quill ToDoリスト ── */
-/* ::before のユニコード文字(☐/☑)を非表示にして .ql-ui 自体をカスタムチェックボックスにする */
+/* Quill の ::before ユニコード文字(☐/☑)を全ブラウザで確実に非表示 */
 .ql-editor li[data-list="unchecked"] > .ql-ui::before,
 .ql-editor li[data-list="checked"] > .ql-ui::before {
-  content: none !important;
+  display: none !important;
 }
 .ql-editor li[data-list="unchecked"] > .ql-ui,
 .ql-editor li[data-list="checked"] > .ql-ui {
