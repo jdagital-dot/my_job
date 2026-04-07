@@ -10,7 +10,7 @@ function migrateLegacyCheckbox(ops) {
   while (i < ops.length) {
     const op = ops[i]
     if (op.insert && typeof op.insert === 'object' && 'checkbox' in op.insert) {
-      const listType = op.insert.checkbox ? 'checked' : 'unchecked'
+      const listType = op.insert.checkbox ? 'unchecked' : 'checked'
       // 次の op がテキスト（改行を含む行）なら結合
       const next = ops[i + 1]
       if (next && typeof next.insert === 'string') {
