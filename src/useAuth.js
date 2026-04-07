@@ -5,9 +5,14 @@ import { signInWithRedirect, signInWithPopup, getRedirectResult, signOut, onAuth
 export function useAuth() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState(null)
 
   useEffect(() => {
-    getRedirectResult(auth).catch(() => {})
+    getRedirectResult(auth).catch((err) => {
+      if (err.code !== 'auth/no-auth-event') {
+        setAuthError('ログインに失敗しました。もう一度お試しください。')
+      }
+    })
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u)
       setLoading(false)
@@ -15,21 +20,27 @@ export function useAuth() {
     return unsubscribe
   }, [])
 
-  const signIn = () => {
-    // Electron 環境では常に signInWithPopup を使う
-    if (typeof window !== 'undefined' && window.electron?.isElectron) {
-      return signInWithPopup(auth, googleProvider)
+  const signIn = async () => {
+    setAuthError(null)
+    try {
+      if (typeof window !== 'undefined' && window.electron?.isElectron) {
+        return await signInWithPopup(auth, googleProvider)
+      }
+      const ua = navigator.userAgent
+      const isWebView = /wv|WebView/.test(ua) ||
+        (ua.includes('iPhone') && !ua.includes('Safari')) ||
+        ua.includes('FBAN') || ua.includes('FBAV')
+      if (isWebView) {
+        return await signInWithRedirect(auth, googleProvider)
+      }
+      return await signInWithPopup(auth, googleProvider)
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setAuthError('ログインに失敗しました。もう一度お試しください。')
+      }
     }
-    const ua = navigator.userAgent
-    const isWebView = /wv|WebView/.test(ua) ||
-      (ua.includes('iPhone') && !ua.includes('Safari')) ||
-      ua.includes('FBAN') || ua.includes('FBAV')
-    if (isWebView) {
-      return signInWithRedirect(auth, googleProvider)
-    }
-    return signInWithPopup(auth, googleProvider)
   }
   const signOutUser = () => signOut(auth)
 
-  return { user, loading, signIn, signOut: signOutUser }
+  return { user, loading, authError, signIn, signOut: signOutUser }
 }
