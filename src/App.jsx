@@ -61,13 +61,13 @@ export default function App() {
       return
     }
 
-    // Notes are empty — wait 2s for Firestore before creating a blank note
+    // Notes are empty — wait 8s for Firestore before creating a blank note
     const timer = setTimeout(() => {
       createNote().then(id => {
         setCurrentNoteId(id)
         localStorage.setItem(LAST_NOTE_KEY, id)
       })
-    }, 2000)
+    }, 8000)
     return () => clearTimeout(timer)
   }, [notesLoading, user?.uid, notes.length])
 
