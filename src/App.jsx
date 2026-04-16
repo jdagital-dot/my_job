@@ -8,14 +8,28 @@ import './App.css'
 const LAST_NOTE_KEY = 'qm_last_note'
 const SAVE_DELAY = 1500
 
+const fmtDate = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
+
 export default function App() {
   const { user, loading: authLoading, authError, signIn, signOut } = useAuth()
-  const { notes, loading: notesLoading, firestoreOk, createNote, updateNote, deleteNote } = useNotes(user?.uid)
+  const {
+    notes, loading: notesLoading, firestoreOk,
+    createNote, updateNote, deleteNote,
+    restoreNote, permanentDeleteNote,
+    getHistory, saveHistory,
+  } = useNotes(user?.uid)
 
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [preview, setPreview] = useState(false)
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState([])
+  const [editorKey, setEditorKey] = useState(0)
 
   const editorRef = useRef(null)
   const currentNoteIdRef = useRef(currentNoteId)
@@ -42,22 +56,25 @@ export default function App() {
 
   useEffect(() => { currentNoteIdRef.current = currentNoteId }, [currentNoteId])
 
-  const currentNote = notes.find(n => n.id === currentNoteId) ?? null
+  // Client-side split: active notes vs trashed notes
+  const activeNotes  = notes.filter(n => !n.deleted)
+  const trashedNotes = notes.filter(n => n.deleted)
+  const currentNote  = notes.find(n => n.id === currentNoteId) ?? null
 
   // On notes loaded: restore last note, or wait then create new one
   useEffect(() => {
     if (notesLoading || !user) return
 
-    // Already on a valid note — nothing to do
-    if (currentNoteId && notes.find(n => n.id === currentNoteId)) return
+    // Already on a valid active note — nothing to do
+    if (currentNoteId && notes.find(n => n.id === currentNoteId && !n.deleted)) return
 
     const lastId = localStorage.getItem(LAST_NOTE_KEY)
-    if (lastId && notes.find(n => n.id === lastId)) {
+    if (lastId && notes.find(n => n.id === lastId && !n.deleted)) {
       setCurrentNoteId(lastId)
       return
     }
-    if (notes.length > 0) {
-      setCurrentNoteId(notes[0].id)
+    if (activeNotes.length > 0) {
+      setCurrentNoteId(activeNotes[0].id)
       return
     }
 
@@ -91,12 +108,13 @@ export default function App() {
         }
       } catch {}
       await updateNote(id, { title, content })
+      saveHistory(id, { content, title, savedAt: new Date().toISOString() })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(''), 2000)
     } finally {
       isSavingRef.current = false
     }
-  }, [updateNote])
+  }, [updateNote, saveHistory])
 
   const handleContentChange = useCallback((content) => {
     pendingContentRef.current = content
@@ -116,14 +134,17 @@ export default function App() {
   const handleSelectNote = (id) => {
     flushSave()
     setCurrentNoteId(id)
+    setEditorKey(k => k + 1)
     setSidebarOpen(false)
     setPreview(false)
+    setHistoryPanelOpen(false)
   }
 
   const handleNewNote = async () => {
     flushSave()
     const id = await createNote()
     setCurrentNoteId(id)
+    setEditorKey(k => k + 1)
     setSidebarOpen(false)
     setPreview(false)
   }
@@ -131,14 +152,49 @@ export default function App() {
   const handleDeleteNote = async (id) => {
     await deleteNote(id)
     if (currentNoteId === id) {
-      const remaining = notes.filter(n => n.id !== id)
+      const remaining = activeNotes.filter(n => n.id !== id)
       if (remaining.length > 0) {
         setCurrentNoteId(remaining[0].id)
+        setEditorKey(k => k + 1)
       } else {
         const newId = await createNote()
         setCurrentNoteId(newId)
+        setEditorKey(k => k + 1)
       }
     }
+  }
+
+  const handleRestoreNote = async (id) => {
+    await restoreNote(id)
+  }
+
+  const handlePermanentDeleteNote = async (id) => {
+    await permanentDeleteNote(id)
+    if (currentNoteId === id) {
+      if (activeNotes.length > 0) {
+        setCurrentNoteId(activeNotes[0].id)
+        setEditorKey(k => k + 1)
+      } else {
+        const newId = await createNote()
+        setCurrentNoteId(newId)
+        setEditorKey(k => k + 1)
+      }
+    }
+  }
+
+  const handleOpenHistory = () => {
+    if (!currentNoteId) return
+    setHistoryEntries(getHistory(currentNoteId))
+    setHistoryPanelOpen(true)
+  }
+
+  const handleRestoreVersion = async (entry) => {
+    clearTimeout(saveTimerRef.current)
+    pendingContentRef.current = null
+    await updateNote(currentNoteId, { title: entry.title, content: entry.content })
+    saveHistory(currentNoteId, { content: entry.content, title: entry.title, savedAt: new Date().toISOString() })
+    setEditorKey(k => k + 1)
+    setHistoryPanelOpen(false)
   }
 
   if (authLoading) {
@@ -177,15 +233,51 @@ export default function App() {
   return (
     <div className="app">
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
+      {historyPanelOpen && <div className="overlay" onClick={() => setHistoryPanelOpen(false)} />}
 
       <Sidebar
         open={sidebarOpen}
-        notes={notes}
+        notes={activeNotes}
+        trashedNotes={trashedNotes}
         currentNoteId={currentNoteId}
         onSelect={handleSelectNote}
         onNew={handleNewNote}
         onDelete={handleDeleteNote}
+        onRestore={handleRestoreNote}
+        onPermanentDelete={handlePermanentDeleteNote}
       />
+
+      {/* History panel (slides in from the right) */}
+      <div className={`history-panel${historyPanelOpen ? ' open' : ''}`} aria-label="編集履歴">
+        <div className="history-panel-header">
+          <span className="history-panel-title">HISTORY</span>
+          <button className="icon-btn" onClick={() => setHistoryPanelOpen(false)} aria-label="閉じる">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div className="history-list">
+          {historyEntries.length === 0 && (
+            <p className="empty">履歴がありません<br /><small>保存するたびに記録されます</small></p>
+          )}
+          {historyEntries.map((entry, i) => (
+            <div key={i} className="history-item">
+              <div className="note-info">
+                <div className="note-title">{entry.title || '無題'}</div>
+                <div className="note-date">{fmtDate(entry.savedAt)}</div>
+              </div>
+              <button
+                className="history-restore-btn"
+                onClick={() => handleRestoreVersion(entry)}
+                aria-label={`「${entry.title || '無題'}」を復元`}
+              >
+                復元
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="main">
         {!firestoreOk && (
@@ -222,7 +314,7 @@ export default function App() {
               >
                 <Editor
                   ref={editorRef}
-                  key={currentNoteId}
+                  key={editorKey}
                   noteId={currentNoteId}
                   content={currentNote.content}
                   onChange={handleContentChange}
@@ -259,6 +351,16 @@ export default function App() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 20 6"/></svg>
           </button>
           <div className="tb-divider" />
+          <button
+            className="tb-btn tb-history"
+            onClick={handleOpenHistory}
+            aria-label="編集履歴"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </button>
           <button
             className={`tb-btn tb-preview${preview ? ' active' : ''}`}
             onClick={() => setPreview(v => !v)}
