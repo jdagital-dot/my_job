@@ -14,6 +14,15 @@ function saveLocal(notes) {
   localStorage.setItem(LS_KEY, JSON.stringify(notes))
 }
 
+const HIST_MAX = 20
+export function getHistory(noteId) {
+  try { return JSON.parse(localStorage.getItem(`qm_hist_${noteId}`) || '[]') } catch { return [] }
+}
+export function saveHistory(noteId, entry) {
+  const updated = [entry, ...getHistory(noteId)].slice(0, HIST_MAX)
+  localStorage.setItem(`qm_hist_${noteId}`, JSON.stringify(updated))
+}
+
 export function useNotes(userId) {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -129,6 +138,53 @@ export function useNotes(userId) {
   }
 
   const deleteNote = async (id) => {
+    const now = new Date().toISOString()
+
+    // Soft-delete: mark as deleted in local state
+    setNotes(prev => {
+      const next = prev.map(n =>
+        n.id === id ? { ...n, deleted: true, deletedAt: now } : n
+      )
+      saveLocal(next)
+      return next
+    })
+
+    if (firestoreOk && !id.startsWith('local_')) {
+      try {
+        await updateDoc(doc(db, 'notes', id), {
+          deleted: true,
+          deletedAt: now,
+        })
+      } catch (err) {
+        console.warn('Firestore soft-delete failed:', err)
+      }
+    }
+  }
+
+  const restoreNote = async (id) => {
+    setNotes(prev => {
+      const next = prev.map(n =>
+        n.id === id ? { ...n, deleted: false, deletedAt: null } : n
+      )
+      saveLocal(next)
+      return next
+    })
+
+    if (firestoreOk && !id.startsWith('local_')) {
+      try {
+        await updateDoc(doc(db, 'notes', id), {
+          deleted: false,
+          deletedAt: null,
+        })
+      } catch (err) {
+        console.warn('Firestore restore failed:', err)
+      }
+    }
+  }
+
+  const permanentDeleteNote = async (id) => {
+    localStorage.removeItem(`qm_hist_${id}`)
+
     setNotes(prev => {
       const next = prev.filter(n => n.id !== id)
       saveLocal(next)
@@ -139,10 +195,15 @@ export function useNotes(userId) {
       try {
         await deleteDoc(doc(db, 'notes', id))
       } catch (err) {
-        console.warn('Firestore deleteNote failed:', err)
+        console.warn('Firestore permanent delete failed:', err)
       }
     }
   }
 
-  return { notes, loading, firestoreOk, createNote, updateNote, deleteNote }
+  return {
+    notes, loading, firestoreOk,
+    createNote, updateNote, deleteNote,
+    restoreNote, permanentDeleteNote,
+    getHistory, saveHistory,
+  }
 }

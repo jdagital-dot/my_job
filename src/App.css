@@ -296,3 +296,102 @@ body {
 .topbar .save-status {
   -webkit-app-region: no-drag;
 }
+
+/* ── Trash Section ── */
+.trash-section {
+  border-top: 1px solid rgba(0,0,0,0.05);
+  flex-shrink: 0;
+}
+.trash-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 12px 20px 10px;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit;
+}
+.trash-toggle-label {
+  font-size: 0.7rem; font-weight: 700; color: #999;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.trash-toggle-label em {
+  font-style: normal; margin-left: 8px; background: rgba(0,0,0,0.05);
+  padding: 1px 8px; border-radius: 99px; font-size: 0.7rem; color: #555;
+}
+.trash-chevron {
+  font-size: 1.1rem; color: #ccc;
+  display: inline-block; transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
+}
+.trash-chevron.open { transform: rotate(90deg); }
+
+.trash-list { padding: 0 10px 12px; max-height: 220px; overflow-y: auto; }
+
+.trash-item { opacity: 0.65; cursor: default; }
+.trash-item:hover { background: none !important; box-shadow: none !important; border-color: transparent !important; opacity: 1; }
+.trash-item::before { display: none !important; }
+
+.trash-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.trash-action-btn {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.03); border: none; cursor: pointer;
+  color: #999; padding: 7px; border-radius: 8px;
+  transition: all 0.15s;
+  min-width: 34px; min-height: 34px;
+}
+.restore-btn:hover, .restore-btn:focus { background: #dcfce7; color: #16a34a; outline: none; }
+.perm-delete-btn:hover, .perm-delete-btn:focus { background: #fee2e2; color: #dc2626; outline: none; }
+@media (hover: none) {
+  .trash-action-btn { opacity: 1; }
+}
+
+/* ── History Panel ── */
+.history-panel {
+  position: fixed;
+  top: env(safe-area-inset-top); right: 0; bottom: env(safe-area-inset-bottom);
+  width: 300px;
+  background: rgba(250, 250, 250, 0.95);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(0,0,0,0.05);
+  display: flex; flex-direction: column; z-index: 100;
+  transform: translateX(100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -10px 0 30px -10px rgba(0,0,0,0.03);
+}
+.history-panel.open { transform: translateX(0); }
+
+.history-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 20px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.history-panel-title {
+  font-size: 0.7rem; font-weight: 700; color: #999;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+.history-list { flex: 1; overflow-y: auto; padding: 12px 10px; }
+
+.history-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 12px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.history-item:hover { background: #fff; border-color: rgba(0,0,0,0.03); box-shadow: 0 4px 12px -2px rgba(0,0,0,0.03); }
+.history-item .note-info { flex: 1; overflow: hidden; }
+
+.history-restore-btn {
+  flex-shrink: 0;
+  padding: 6px 12px; border-radius: 8px;
+  background: #111; color: #fff; border: none; cursor: pointer;
+  font-size: 0.75rem; font-weight: 600; font-family: inherit;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.history-restore-btn:hover { opacity: 0.75; }
+
+.empty small { display: block; margin-top: 6px; font-size: 0.75rem; color: #ddd; }
+
+@media (max-width: 640px) {
+  .history-panel { width: 85%; }
+}
