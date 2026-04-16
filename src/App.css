@@ -221,7 +221,7 @@ body {
 #qm-toolbar.ql-toolbar.ql-snow { display: flex; }
 .ql-editor {
   flex: 1; font-size: 1.1rem; line-height: 1.85; color: #111;
-  padding: 40px max(24px, calc(50% - 360px)) calc(80px + env(safe-area-inset-bottom)) !important;
+  padding: 16px max(24px, calc(50% - 360px)) calc(80px + env(safe-area-inset-bottom)) !important;
   padding-bottom: calc(80px + env(safe-area-inset-bottom) + var(--keyboard-height, 0px)) !important;
   font-family: inherit;
 }
@@ -272,7 +272,7 @@ body {
 @media (max-width: 640px) {
   .sidebar { width: 85%; }
   .ql-editor, .preview-area {
-    padding: 30px 20px 80px !important;
+    padding: 16px 20px 80px !important;
     font-size: 1.05rem;
   }
   .topbar { padding: 0 12px; }
