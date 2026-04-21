@@ -52,8 +52,9 @@ body {
 
 /* ── App Layout ── */
 .app {
-  display: flex; height: 100dvh; overflow: hidden; position: relative; background: #fff;
-  padding-top: env(safe-area-inset-top);
+  display: flex; overflow: hidden; background: #fff;
+  position: fixed;
+  top: env(safe-area-inset-top); left: 0; right: 0; bottom: 0;
 }
 
 /* ── Overlay ── */
