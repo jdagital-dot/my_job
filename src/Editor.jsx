@@ -45,7 +45,16 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
   useImperativeHandle(ref, () => ({
     getHTML() {
       return quillRef.current?.root.innerHTML ?? ''
-    }
+    },
+    format(name, value) {
+      quillRef.current?.format(name, value)
+    },
+    getFormat() {
+      return quillRef.current?.getFormat() ?? {}
+    },
+    focus() {
+      quillRef.current?.focus()
+    },
   }))
 
   // Initialize Quill once

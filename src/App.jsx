@@ -33,6 +33,7 @@ export default function App() {
 
   const editorRef = useRef(null)
   const currentNoteIdRef = useRef(currentNoteId)
+  const shortcutRef = useRef({})
 
   // Keep bottom toolbar above virtual keyboard using visualViewport API
   useEffect(() => {
@@ -131,6 +132,40 @@ export default function App() {
     }
   }, [doSave])
 
+  // Always keep shortcutRef current so the keydown listener never goes stale
+  shortcutRef.current = { editorRef, setPreview, handleOpenHistory: null }
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const isMac = /mac/i.test(navigator.platform)
+    const handler = (e) => {
+      const ctrl = isMac ? e.metaKey : e.ctrlKey
+      if (!ctrl || !e.shiftKey) return
+
+      const { editorRef, setPreview } = shortcutRef.current
+      const editor = editorRef.current
+
+      const fmt = (name, value) => {
+        if (!editor) return
+        const current = editor.getFormat()
+        editor.format(name, current[name] === value ? false : value)
+        editor.focus()
+      }
+
+      switch (e.key.toUpperCase()) {
+        case 'H': e.preventDefault(); fmt('header', 1); break
+        case 'U': e.preventDefault(); fmt('list', 'bullet'); break
+        case 'O': e.preventDefault(); fmt('list', 'ordered'); break
+        case 'K': e.preventDefault(); fmt('list', 'unchecked'); break
+        case 'Y': e.preventDefault(); shortcutRef.current.openHistory?.(); break
+        case 'P': e.preventDefault(); setPreview(v => !v); break
+        default: break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   const handleSelectNote = (id) => {
     flushSave()
     setCurrentNoteId(id)
@@ -187,6 +222,7 @@ export default function App() {
     setHistoryEntries(getHistory(currentNoteId))
     setHistoryPanelOpen(true)
   }
+  shortcutRef.current.openHistory = handleOpenHistory
 
   const handleRestoreVersion = async (entry) => {
     clearTimeout(saveTimerRef.current)
