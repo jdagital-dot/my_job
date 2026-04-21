@@ -64,7 +64,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
     const quill = new Quill(containerRef.current, {
       theme: 'snow',
       modules: {
-        toolbar: readOnly ? false : '#qm-toolbar',
+        toolbar: false,
       },
       readOnly,
       placeholder: readOnly ? '' : '書き始めましょう…',

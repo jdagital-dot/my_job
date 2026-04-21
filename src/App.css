@@ -236,6 +236,9 @@ body {
 
 .active-btn { background: rgba(0,0,0,0.06); color: #111; }
 
+.pane-focused { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.06); }
+.pane-save-status { font-size: 0.7rem; flex-shrink: 0; color: #bbb; margin-left: 8px; }
+
 @media (max-width: 640px) {
   .editor-area.split { flex-direction: column; }
   .pane-right { border-left: none; border-top: 1px solid rgba(0,0,0,0.06); }

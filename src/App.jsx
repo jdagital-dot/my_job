@@ -14,6 +14,19 @@ const fmtDate = (iso) => {
   return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
+function extractTitle(content) {
+  try {
+    const ops = JSON.parse(content).ops ?? []
+    for (const op of ops) {
+      if (typeof op.insert === 'string') {
+        const line = op.insert.split('\n')[0].trim()
+        if (line) return line
+      }
+    }
+  } catch {}
+  return '無題'
+}
+
 export default function App() {
   const { user, loading: authLoading, authError, signIn, signOut } = useAuth()
   const {
@@ -24,20 +37,30 @@ export default function App() {
   } = useNotes(user?.uid)
 
   const [currentNoteId, setCurrentNoteId] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [saveStatus, setSaveStatus] = useState('')
-  const [preview, setPreview] = useState(false)
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [saveStatus, setSaveStatus]       = useState('')
+  const [saveStatus2, setSaveStatus2]     = useState('')
+  const [preview, setPreview]             = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
-  const [historyEntries, setHistoryEntries] = useState([])
-  const [editorKey, setEditorKey] = useState(0)
-  const [splitMode, setSplitMode] = useState(false)
+  const [historyEntries, setHistoryEntries]     = useState([])
+  const [editorKey, setEditorKey]   = useState(0)
+  const [splitMode, setSplitMode]   = useState(false)
   const [secondNoteId, setSecondNoteId] = useState(null)
   const [editorKey2, setEditorKey2] = useState(0)
+  const [focusedPane, setFocusedPane] = useState('left')
 
-  const editorRef = useRef(null)
+  const editorRef  = useRef(null)
   const editorRef2 = useRef(null)
-  const currentNoteIdRef = useRef(currentNoteId)
+  const currentNoteIdRef  = useRef(currentNoteId)
+  const secondNoteIdRef   = useRef(secondNoteId)
   const shortcutRef = useRef({})
+
+  const pendingContentRef  = useRef(null)
+  const saveTimerRef       = useRef(null)
+  const isSavingRef        = useRef(false)
+  const pendingContentRef2 = useRef(null)
+  const saveTimerRef2      = useRef(null)
+  const isSavingRef2       = useRef(false)
 
   // Keep bottom toolbar above virtual keyboard using visualViewport API
   useEffect(() => {
@@ -55,36 +78,24 @@ export default function App() {
       document.documentElement.style.removeProperty('--keyboard-height')
     }
   }, [])
-  const pendingContentRef = useRef(null)
-  const saveTimerRef = useRef(null)
-  const isSavingRef = useRef(false)
 
   useEffect(() => { currentNoteIdRef.current = currentNoteId }, [currentNoteId])
+  useEffect(() => { secondNoteIdRef.current  = secondNoteId  }, [secondNoteId])
 
-  // Client-side split: active notes vs trashed notes
   const activeNotes  = notes.filter(n => !n.deleted)
   const trashedNotes = notes.filter(n => n.deleted)
   const currentNote  = notes.find(n => n.id === currentNoteId) ?? null
-  const secondNote   = notes.find(n => n.id === secondNoteId) ?? null
+  const secondNote   = notes.find(n => n.id === secondNoteId)  ?? null
 
   // On notes loaded: restore last note, or wait then create new one
   useEffect(() => {
     if (notesLoading || !user) return
-
-    // Already on a valid active note — nothing to do
     if (currentNoteId && notes.find(n => n.id === currentNoteId && !n.deleted)) return
-
     const lastId = localStorage.getItem(LAST_NOTE_KEY)
     if (lastId && notes.find(n => n.id === lastId && !n.deleted)) {
-      setCurrentNoteId(lastId)
-      return
+      setCurrentNoteId(lastId); return
     }
-    if (activeNotes.length > 0) {
-      setCurrentNoteId(activeNotes[0].id)
-      return
-    }
-
-    // Notes are empty — wait 8s for Firestore before creating a blank note
+    if (activeNotes.length > 0) { setCurrentNoteId(activeNotes[0].id); return }
     const timer = setTimeout(() => {
       createNote().then(id => {
         setCurrentNoteId(id)
@@ -98,28 +109,18 @@ export default function App() {
     if (currentNoteId) localStorage.setItem(LAST_NOTE_KEY, currentNoteId)
   }, [currentNoteId])
 
+  // Left pane save
   const doSave = useCallback(async (content) => {
     const id = currentNoteIdRef.current
     if (!id || isSavingRef.current) return
     isSavingRef.current = true
     try {
-      let title = '無題'
-      try {
-        const ops = JSON.parse(content).ops ?? []
-        for (const op of ops) {
-          if (typeof op.insert === 'string') {
-            const line = op.insert.split('\n')[0].trim()
-            if (line) { title = line; break }
-          }
-        }
-      } catch {}
+      const title = extractTitle(content)
       await updateNote(id, { title, content })
       saveHistory(id, { content, title, savedAt: new Date().toISOString() })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(''), 2000)
-    } finally {
-      isSavingRef.current = false
-    }
+    } finally { isSavingRef.current = false }
   }, [updateNote, saveHistory])
 
   const handleContentChange = useCallback((content) => {
@@ -137,8 +138,46 @@ export default function App() {
     }
   }, [doSave])
 
-  // Always keep shortcutRef current so the keydown listener never goes stale
-  shortcutRef.current = { editorRef, setPreview, handleOpenHistory: null }
+  // Right pane save
+  const doSave2 = useCallback(async (content) => {
+    const id = secondNoteIdRef.current
+    if (!id || isSavingRef2.current) return
+    isSavingRef2.current = true
+    try {
+      const title = extractTitle(content)
+      await updateNote(id, { title, content })
+      saveHistory(id, { content, title, savedAt: new Date().toISOString() })
+      setSaveStatus2('saved')
+      setTimeout(() => setSaveStatus2(''), 2000)
+    } finally { isSavingRef2.current = false }
+  }, [updateNote, saveHistory])
+
+  const handleContentChange2 = useCallback((content) => {
+    pendingContentRef2.current = content
+    clearTimeout(saveTimerRef2.current)
+    setSaveStatus2('saving')
+    saveTimerRef2.current = setTimeout(() => doSave2(content), SAVE_DELAY)
+  }, [doSave2])
+
+  const flushSave2 = useCallback(() => {
+    if (pendingContentRef2.current) {
+      clearTimeout(saveTimerRef2.current)
+      doSave2(pendingContentRef2.current)
+      pendingContentRef2.current = null
+    }
+  }, [doSave2])
+
+  // Apply format to focused pane
+  const applyFormat = useCallback((name, value) => {
+    const editor = shortcutRef.current.focusedPane === 'right' ? editorRef2.current : editorRef.current
+    if (!editor) return
+    const current = editor.getFormat()
+    editor.format(name, current[name] === value ? false : value)
+    editor.focus()
+  }, [])
+
+  // Always keep shortcutRef current
+  shortcutRef.current = { editorRef, editorRef2, setPreview, focusedPane, openHistory: null }
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -146,17 +185,14 @@ export default function App() {
     const handler = (e) => {
       const ctrl = isMac ? e.metaKey : e.ctrlKey
       if (!ctrl || !e.shiftKey) return
-
-      const { editorRef, setPreview } = shortcutRef.current
-      const editor = editorRef.current
-
+      const { editorRef, editorRef2, setPreview, focusedPane } = shortcutRef.current
+      const editor = (focusedPane === 'right' ? editorRef2 : editorRef).current
       const fmt = (name, value) => {
         if (!editor) return
-        const current = editor.getFormat()
-        editor.format(name, current[name] === value ? false : value)
+        const cur = editor.getFormat()
+        editor.format(name, cur[name] === value ? false : value)
         editor.focus()
       }
-
       switch (e.key.toUpperCase()) {
         case 'H': e.preventDefault(); fmt('header', 1); break
         case 'U': e.preventDefault(); fmt('list', 'bullet'); break
@@ -172,7 +208,7 @@ export default function App() {
   }, [])
 
   const handleSelectNote = (id) => {
-    flushSave()
+    flushSave(); flushSave2()
     setCurrentNoteId(id)
     setEditorKey(k => k + 1)
     setSidebarOpen(false)
@@ -181,7 +217,7 @@ export default function App() {
   }
 
   const handleNewNote = async () => {
-    flushSave()
+    flushSave(); flushSave2()
     const id = await createNote()
     setCurrentNoteId(id)
     setEditorKey(k => k + 1)
@@ -193,14 +229,8 @@ export default function App() {
     await deleteNote(id)
     if (currentNoteId === id) {
       const remaining = activeNotes.filter(n => n.id !== id)
-      if (remaining.length > 0) {
-        setCurrentNoteId(remaining[0].id)
-        setEditorKey(k => k + 1)
-      } else {
-        const newId = await createNote()
-        setCurrentNoteId(newId)
-        setEditorKey(k => k + 1)
-      }
+      if (remaining.length > 0) { setCurrentNoteId(remaining[0].id); setEditorKey(k => k + 1) }
+      else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
     }
   }
 
@@ -215,25 +245,18 @@ export default function App() {
   }
 
   const handleSelectSecondNote = (id) => {
+    flushSave2()
     setSecondNoteId(id)
     setEditorKey2(k => k + 1)
   }
 
-  const handleRestoreNote = async (id) => {
-    await restoreNote(id)
-  }
+  const handleRestoreNote = async (id) => { await restoreNote(id) }
 
   const handlePermanentDeleteNote = async (id) => {
     await permanentDeleteNote(id)
     if (currentNoteId === id) {
-      if (activeNotes.length > 0) {
-        setCurrentNoteId(activeNotes[0].id)
-        setEditorKey(k => k + 1)
-      } else {
-        const newId = await createNote()
-        setCurrentNoteId(newId)
-        setEditorKey(k => k + 1)
-      }
+      if (activeNotes.length > 0) { setCurrentNoteId(activeNotes[0].id); setEditorKey(k => k + 1) }
+      else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
     }
   }
 
@@ -303,7 +326,7 @@ export default function App() {
         onPermanentDelete={handlePermanentDeleteNote}
       />
 
-      {/* History panel (slides in from the right) */}
+      {/* History panel */}
       <div className={`history-panel${historyPanelOpen ? ' open' : ''}`} aria-label="編集履歴">
         <div className="history-panel-header">
           <span className="history-panel-title">HISTORY</span>
@@ -323,11 +346,8 @@ export default function App() {
                 <div className="note-title">{entry.title || '無題'}</div>
                 <div className="note-date">{fmtDate(entry.savedAt)}</div>
               </div>
-              <button
-                className="history-restore-btn"
-                onClick={() => handleRestoreVersion(entry)}
-                aria-label={`「${entry.title || '無題'}」を復元`}
-              >
+              <button className="history-restore-btn" onClick={() => handleRestoreVersion(entry)}
+                aria-label={`「${entry.title || '無題'}」を復元`}>
                 復元
               </button>
             </div>
@@ -353,12 +373,8 @@ export default function App() {
             {saveStatus === 'saving' && <span className="status-saving">● 保存中</span>}
             {saveStatus === 'saved'  && <span className="status-saved">● 保存済</span>}
           </div>
-          <button
-            className={`icon-btn${splitMode ? ' active-btn' : ''}`}
-            onClick={handleToggleSplit}
-            aria-label="分割表示"
-            aria-pressed={splitMode}
-          >
+          <button className={`icon-btn${splitMode ? ' active-btn' : ''}`} onClick={handleToggleSplit}
+            aria-label="分割表示" aria-pressed={splitMode}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/>
             </svg>
@@ -373,26 +389,19 @@ export default function App() {
 
         <div className={`editor-area${splitMode ? ' split' : ''}`}>
           {/* Left pane */}
-          <div className="editor-pane">
+          <div className={`editor-pane${focusedPane === 'left' && splitMode ? ' pane-focused' : ''}`}
+            onFocus={() => setFocusedPane('left')}>
             {currentNote ? (
               <>
-                <div
-                  id="qm-editor"
-                  style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}
-                >
-                  <Editor
-                    ref={editorRef}
-                    key={editorKey}
-                    noteId={currentNoteId}
-                    content={currentNote.content}
-                    onChange={handleContentChange}
-                  />
+                <div id="qm-editor"
+                  style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+                  <Editor ref={editorRef} key={editorKey}
+                    noteId={currentNoteId} content={currentNote.content}
+                    onChange={handleContentChange} />
                 </div>
                 {preview && (
-                  <div
-                    className="preview-area ql-editor"
-                    dangerouslySetInnerHTML={{ __html: editorRef.current?.getHTML() ?? '' }}
-                  />
+                  <div className="preview-area ql-editor"
+                    dangerouslySetInnerHTML={{ __html: editorRef.current?.getHTML() ?? '' }} />
                 )}
               </>
             ) : (
@@ -402,68 +411,55 @@ export default function App() {
 
           {/* Right pane (split mode) */}
           {splitMode && (
-            <div className="editor-pane pane-right">
+            <div className={`editor-pane pane-right${focusedPane === 'right' ? ' pane-focused' : ''}`}
+              onFocus={() => setFocusedPane('right')}>
               <div className="pane-header">
-                <select
-                  className="pane-select"
-                  value={secondNoteId || ''}
+                <select className="pane-select" value={secondNoteId || ''}
                   onChange={e => handleSelectSecondNote(e.target.value)}
-                  aria-label="右ペインのメモを選択"
-                >
+                  aria-label="右ペインのメモを選択">
                   <option value="">メモを選択...</option>
                   {activeNotes.map(n => (
                     <option key={n.id} value={n.id}>{n.title || '無題'}</option>
                   ))}
                 </select>
+                <span className="pane-save-status">
+                  {saveStatus2 === 'saving' && <span className="status-saving">● 保存中</span>}
+                  {saveStatus2 === 'saved'  && <span className="status-saved">● 保存済</span>}
+                </span>
               </div>
               {secondNote ? (
-                <Editor
-                  ref={editorRef2}
-                  key={editorKey2}
-                  noteId={secondNoteId}
-                  content={secondNote.content}
-                  readOnly
-                />
+                <Editor ref={editorRef2} key={editorKey2}
+                  noteId={secondNoteId} content={secondNote.content}
+                  onChange={handleContentChange2} />
               ) : (
                 <div className="loading">メモを選択してください</div>
               )}
             </div>
           )}
         </div>
-        {/* Bottom toolbar */}
+
+        {/* Bottom toolbar — programmatic (works for focused pane) */}
         <div id="qm-toolbar" className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
-          <button className="ql-bold tb-btn" aria-label="太字">
-            <b>B</b>
-          </button>
-          <button className="ql-header tb-btn" value="1" aria-label="見出し">
-            H1
-          </button>
-          <button className="ql-list tb-btn" value="bullet" aria-label="箇条書き">
+          <button className="tb-btn" onClick={() => applyFormat('bold', true)} aria-label="太字"><b>B</b></button>
+          <button className="tb-btn" onClick={() => applyFormat('header', 1)} aria-label="見出し">H1</button>
+          <button className="tb-btn" onClick={() => applyFormat('list', 'bullet')} aria-label="箇条書き">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
           </button>
-          <button className="ql-list tb-btn" value="ordered" aria-label="番号リスト">
+          <button className="tb-btn" onClick={() => applyFormat('list', 'ordered')} aria-label="番号リスト">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="2" y="8" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">1.</text><text x="2" y="14" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">2.</text><text x="2" y="20" fontSize="7" fontWeight="bold" stroke="none" fill="currentColor">3.</text></svg>
           </button>
-          <button className="ql-list tb-btn" value="unchecked" aria-label="チェックボックス">
+          <button className="tb-btn" onClick={() => applyFormat('list', 'unchecked')} aria-label="チェックボックス">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 20 6"/></svg>
           </button>
           <div className="tb-divider" />
-          <button
-            className="tb-btn tb-history"
-            onClick={handleOpenHistory}
-            aria-label="編集履歴"
-          >
+          <button className="tb-btn tb-history" onClick={handleOpenHistory} aria-label="編集履歴">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <button
-            className={`tb-btn tb-preview${preview ? ' active' : ''}`}
+          <button className={`tb-btn tb-preview${preview ? ' active' : ''}`}
             onClick={() => setPreview(v => !v)}
-            aria-label={preview ? '編集モード' : 'プレビュー'}
-            aria-pressed={preview}
-          >
+            aria-label={preview ? '編集モード' : 'プレビュー'} aria-pressed={preview}>
             {preview ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             ) : (
