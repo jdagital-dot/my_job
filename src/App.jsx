@@ -156,7 +156,7 @@ export default function App() {
         case 'H': e.preventDefault(); fmt('header', 1); break
         case 'U': e.preventDefault(); fmt('list', 'bullet'); break
         case 'O': e.preventDefault(); fmt('list', 'ordered'); break
-        case 'K': e.preventDefault(); fmt('list', 'unchecked'); break
+        case 'X': e.preventDefault(); fmt('list', 'unchecked'); break
         case 'Y': e.preventDefault(); shortcutRef.current.openHistory?.(); break
         case 'P': e.preventDefault(); setPreview(v => !v); break
         default: break
