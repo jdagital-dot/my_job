@@ -211,6 +211,38 @@ body {
 .editor-area {
   flex: 1; overflow: hidden; display: flex; flex-direction: column;
 }
+.editor-area.split { flex-direction: row; }
+
+.editor-pane {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+}
+.pane-right {
+  border-left: 1px solid rgba(0,0,0,0.06);
+}
+
+.pane-header {
+  display: flex; align-items: center;
+  padding: 5px 12px;
+  background: rgba(0,0,0,0.015);
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  flex-shrink: 0;
+}
+.pane-select {
+  flex: 1; font-size: 0.8rem; border: none; background: transparent;
+  font-family: inherit; color: #666; cursor: pointer; font-weight: 500;
+  outline: none;
+}
+.pane-select:hover { color: #111; }
+
+.active-btn { background: rgba(0,0,0,0.06); color: #111; }
+
+.pane-focused { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.06); }
+.pane-save-status { font-size: 0.7rem; flex-shrink: 0; color: #bbb; margin-left: 8px; }
+
+@media (max-width: 640px) {
+  .editor-area.split { flex-direction: column; }
+  .pane-right { border-left: none; border-top: 1px solid rgba(0,0,0,0.06); }
+}
 .loading {
   flex: 1; display: flex; align-items: center; justify-content: center;
   color: #ddd; font-size: 0.95rem; font-weight: 500;

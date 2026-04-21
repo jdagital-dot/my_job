@@ -36,7 +36,7 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
@@ -64,14 +64,17 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
     const quill = new Quill(containerRef.current, {
       theme: 'snow',
       modules: {
-        toolbar: '#qm-toolbar',
+        toolbar: false,
       },
-      placeholder: '書き始めましょう…',
+      readOnly,
+      placeholder: readOnly ? '' : '書き始めましょう…',
     })
 
-    quill.on('text-change', () => {
-      onChangeRef.current(JSON.stringify(quill.getContents()))
-    })
+    if (!readOnly) {
+      quill.on('text-change', () => {
+        onChangeRef.current(JSON.stringify(quill.getContents()))
+      })
+    }
 
     quillRef.current = quill
   }, [])
