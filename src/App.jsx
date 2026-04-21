@@ -30,8 +30,12 @@ export default function App() {
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
   const [historyEntries, setHistoryEntries] = useState([])
   const [editorKey, setEditorKey] = useState(0)
+  const [splitMode, setSplitMode] = useState(false)
+  const [secondNoteId, setSecondNoteId] = useState(null)
+  const [editorKey2, setEditorKey2] = useState(0)
 
   const editorRef = useRef(null)
+  const editorRef2 = useRef(null)
   const currentNoteIdRef = useRef(currentNoteId)
   const shortcutRef = useRef({})
 
@@ -61,6 +65,7 @@ export default function App() {
   const activeNotes  = notes.filter(n => !n.deleted)
   const trashedNotes = notes.filter(n => n.deleted)
   const currentNote  = notes.find(n => n.id === currentNoteId) ?? null
+  const secondNote   = notes.find(n => n.id === secondNoteId) ?? null
 
   // On notes loaded: restore last note, or wait then create new one
   useEffect(() => {
@@ -199,6 +204,21 @@ export default function App() {
     }
   }
 
+  const handleToggleSplit = () => {
+    setSplitMode(v => {
+      if (!v && !secondNoteId) {
+        const other = activeNotes.find(n => n.id !== currentNoteId)
+        if (other) setSecondNoteId(other.id)
+      }
+      return !v
+    })
+  }
+
+  const handleSelectSecondNote = (id) => {
+    setSecondNoteId(id)
+    setEditorKey2(k => k + 1)
+  }
+
   const handleRestoreNote = async (id) => {
     await restoreNote(id)
   }
@@ -333,6 +353,16 @@ export default function App() {
             {saveStatus === 'saving' && <span className="status-saving">● 保存中</span>}
             {saveStatus === 'saved'  && <span className="status-saved">● 保存済</span>}
           </div>
+          <button
+            className={`icon-btn${splitMode ? ' active-btn' : ''}`}
+            onClick={handleToggleSplit}
+            aria-label="分割表示"
+            aria-pressed={splitMode}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/>
+            </svg>
+          </button>
           <button className="icon-btn" onClick={signOut} aria-label="サインアウト">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -341,32 +371,63 @@ export default function App() {
           </button>
         </header>
 
-        <div className="editor-area">
-          {currentNote ? (
-            <>
-              <div
-                id="qm-editor"
-                style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}
-              >
-                <Editor
-                  ref={editorRef}
-                  key={editorKey}
-                  noteId={currentNoteId}
-                  content={currentNote.content}
-                  onChange={handleContentChange}
-                />
-              </div>
-              {preview && (
+        <div className={`editor-area${splitMode ? ' split' : ''}`}>
+          {/* Left pane */}
+          <div className="editor-pane">
+            {currentNote ? (
+              <>
                 <div
-                  className="preview-area ql-editor"
-                  dangerouslySetInnerHTML={{
-                    __html: editorRef.current?.getHTML() ?? ''
-                  }}
+                  id="qm-editor"
+                  style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}
+                >
+                  <Editor
+                    ref={editorRef}
+                    key={editorKey}
+                    noteId={currentNoteId}
+                    content={currentNote.content}
+                    onChange={handleContentChange}
+                  />
+                </div>
+                {preview && (
+                  <div
+                    className="preview-area ql-editor"
+                    dangerouslySetInnerHTML={{ __html: editorRef.current?.getHTML() ?? '' }}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="loading">読み込み中...</div>
+            )}
+          </div>
+
+          {/* Right pane (split mode) */}
+          {splitMode && (
+            <div className="editor-pane pane-right">
+              <div className="pane-header">
+                <select
+                  className="pane-select"
+                  value={secondNoteId || ''}
+                  onChange={e => handleSelectSecondNote(e.target.value)}
+                  aria-label="右ペインのメモを選択"
+                >
+                  <option value="">メモを選択...</option>
+                  {activeNotes.map(n => (
+                    <option key={n.id} value={n.id}>{n.title || '無題'}</option>
+                  ))}
+                </select>
+              </div>
+              {secondNote ? (
+                <Editor
+                  ref={editorRef2}
+                  key={editorKey2}
+                  noteId={secondNoteId}
+                  content={secondNote.content}
+                  readOnly
                 />
+              ) : (
+                <div className="loading">メモを選択してください</div>
               )}
-            </>
-          ) : (
-            <div className="loading">読み込み中...</div>
+            </div>
           )}
         </div>
         {/* Bottom toolbar */}
