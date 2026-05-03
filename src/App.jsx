@@ -120,7 +120,14 @@ export default function App() {
       saveHistory(id, { content, title, savedAt: new Date().toISOString() })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(''), 2000)
-    } finally { isSavingRef.current = false }
+    } finally {
+      isSavingRef.current = false
+      if (pendingContentRef.current) {
+        const next = pendingContentRef.current
+        pendingContentRef.current = null
+        doSave(next)
+      }
+    }
   }, [updateNote, saveHistory])
 
   const handleContentChange = useCallback((content) => {
@@ -149,7 +156,14 @@ export default function App() {
       saveHistory(id, { content, title, savedAt: new Date().toISOString() })
       setSaveStatus2('saved')
       setTimeout(() => setSaveStatus2(''), 2000)
-    } finally { isSavingRef2.current = false }
+    } finally {
+      isSavingRef2.current = false
+      if (pendingContentRef2.current) {
+        const next = pendingContentRef2.current
+        pendingContentRef2.current = null
+        doSave2(next)
+      }
+    }
   }, [updateNote, saveHistory])
 
   const handleContentChange2 = useCallback((content) => {
