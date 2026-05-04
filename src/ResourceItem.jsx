@@ -28,10 +28,12 @@ export default function ResourceItem({
     const close = (e) => {
       if (!menuRef.current?.contains(e.target)) setMenu(null)
     }
+    const closeOnScroll = () => setMenu(null)
     window.addEventListener('mousedown', close)
-    window.addEventListener('scroll', () => setMenu(null), true)
+    window.addEventListener('scroll', closeOnScroll, true)
     return () => {
       window.removeEventListener('mousedown', close)
+      window.removeEventListener('scroll', closeOnScroll, true)
     }
   }, [menu])
 

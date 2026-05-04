@@ -17,6 +17,30 @@ const fmtDate = (iso) => {
   return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
+// Quill が生成する HTML に限定したサニタイザ
+// script タグ・インラインハンドラ・javascript: URL を除去する
+function sanitizeHTML(html) {
+  if (typeof document === 'undefined') return html
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT)
+  const toRemove = []
+  let node = walker.currentNode
+  while (node) {
+    const el = node
+    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'IFRAME') {
+      toRemove.push(el)
+    } else {
+      for (const attr of Array.from(el.attributes)) {
+        if (/^on/i.test(attr.name)) el.removeAttribute(attr.name)
+        else if (/javascript:/i.test(attr.value)) el.removeAttribute(attr.name)
+      }
+    }
+    node = walker.nextNode()
+  }
+  toRemove.forEach(el => el.remove())
+  return doc.body.innerHTML
+}
+
 function extractTitle(content) {
   try {
     const ops = JSON.parse(content).ops ?? []
@@ -252,12 +276,17 @@ export default function App() {
   }
 
   const handleNewNote = async () => {
-    flushSave(); flushSave2()
-    const id = await createNote()
-    setCurrentNoteId(id)
-    setEditorKey(k => k + 1)
-    setSidebarOpen(false)
-    setPreview(false)
+    try {
+      flushSave(); flushSave2()
+      const id = await createNote()
+      if (!id) { showToast('メモの作成に失敗しました'); return }
+      setCurrentNoteId(id)
+      setEditorKey(k => k + 1)
+      setSidebarOpen(false)
+      setPreview(false)
+    } catch {
+      showToast('メモの作成に失敗しました')
+    }
   }
 
   const handleDeleteNote = (id) => {
@@ -359,12 +388,18 @@ export default function App() {
   shortcutRef.current.openHistory = handleOpenHistory
 
   const handleRestoreVersion = async (entry) => {
+    if (!currentNoteId) { showToast('メモが選択されていません'); return }
     clearTimeout(saveTimerRef.current)
     pendingContentRef.current = null
-    await updateNote(currentNoteId, { title: entry.title, content: entry.content })
-    saveHistory(currentNoteId, { content: entry.content, title: entry.title, savedAt: new Date().toISOString() })
-    setEditorKey(k => k + 1)
-    setHistoryPanelOpen(false)
+    try {
+      await updateNote(currentNoteId, { title: entry.title, content: entry.content })
+      saveHistory(currentNoteId, { content: entry.content, title: entry.title, savedAt: new Date().toISOString() })
+      setEditorKey(k => k + 1)
+      setHistoryPanelOpen(false)
+      showToast('復元しました')
+    } catch {
+      showToast('復元に失敗しました')
+    }
   }
 
   if (authLoading) {
@@ -514,7 +549,7 @@ export default function App() {
                 </div>
                 {preview && (
                   <div className="preview-area ql-editor"
-                    dangerouslySetInnerHTML={{ __html: editorRef.current?.getHTML() ?? '' }} />
+                    dangerouslySetInnerHTML={{ __html: sanitizeHTML(editorRef.current?.getHTML() ?? '') }} />
                 )}
               </>
             ) : (
