@@ -16,20 +16,39 @@ ipcMain.handle('resource:pickFolder', async () => {
   return { path: p, name: path.basename(p) }
 })
 
+function resolvePathSafe(p) {
+  if (typeof p !== 'string' || !p.trim()) return null
+  try {
+    // シンボリックリンクを解決し、正規化されたパスを返す
+    return fs.realpathSync(p)
+  } catch {
+    // パスが存在しない場合は正規化のみ（存在チェックは呼び出し側で）
+    const normalized = path.normalize(p)
+    // null バイトや制御文字を含むパスを拒否
+    if (/[\0\x01-\x1f]/.test(normalized)) return null
+    return normalized
+  }
+}
+
 ipcMain.handle('resource:openPath', async (_e, p) => {
-  if (typeof p !== 'string' || !p) return { ok: false, error: 'invalid path' }
-  const err = await shell.openPath(p)
+  const safe = resolvePathSafe(p)
+  if (!safe) return { ok: false, error: 'invalid path' }
+  const err = await shell.openPath(safe)
   return err ? { ok: false, error: err } : { ok: true }
 })
 
 ipcMain.handle('resource:showInFolder', async (_e, p) => {
-  if (typeof p !== 'string' || !p) return { ok: false }
-  shell.showItemInFolder(p)
+  const safe = resolvePathSafe(p)
+  if (!safe) return { ok: false, error: 'invalid path' }
+  shell.showItemInFolder(safe)
   return { ok: true }
 })
 
 ipcMain.handle('resource:pathExists', async (_e, p) => {
-  try { return fs.existsSync(p) } catch { return false }
+  try {
+    const safe = resolvePathSafe(p)
+    return safe ? fs.existsSync(safe) : false
+  } catch { return false }
 })
 
 function startLocalServer(distDir) {
