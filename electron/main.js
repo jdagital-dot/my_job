@@ -1,7 +1,36 @@
-const { app, BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
 const path = require('path')
 const http = require('http')
 const fs = require('fs')
+
+ipcMain.handle('resource:pickFiles', async () => {
+  const r = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+  if (r.canceled) return []
+  return r.filePaths.map(p => ({ path: p, name: path.basename(p) }))
+})
+
+ipcMain.handle('resource:pickFolder', async () => {
+  const r = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+  if (r.canceled || r.filePaths.length === 0) return null
+  const p = r.filePaths[0]
+  return { path: p, name: path.basename(p) }
+})
+
+ipcMain.handle('resource:openPath', async (_e, p) => {
+  if (typeof p !== 'string' || !p) return { ok: false, error: 'invalid path' }
+  const err = await shell.openPath(p)
+  return err ? { ok: false, error: err } : { ok: true }
+})
+
+ipcMain.handle('resource:showInFolder', async (_e, p) => {
+  if (typeof p !== 'string' || !p) return { ok: false }
+  shell.showItemInFolder(p)
+  return { ok: true }
+})
+
+ipcMain.handle('resource:pathExists', async (_e, p) => {
+  try { return fs.existsSync(p) } catch { return false }
+})
 
 function startLocalServer(distDir) {
   const mimeTypes = {
