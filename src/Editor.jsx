@@ -98,6 +98,11 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
     })
 
     quillRef.current = quill
+
+    return () => {
+      quill.disable()
+      quillRef.current = null
+    }
   }, [])
 
   // Load content when note changes
