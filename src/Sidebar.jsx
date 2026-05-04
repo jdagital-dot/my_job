@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import ResourceItem from './ResourceItem'
 
 function NoteIcon() {
   return (
@@ -44,12 +45,34 @@ export default function Sidebar({
   open, notes, trashedNotes, currentNoteId,
   onSelect, onNew, onDelete,
   onRestore, onPermanentDelete,
+  resources = [], allTags = [], resourcesSupported = false, isElectron = false,
+  onAddFiles, onAddFolder,
+  onOpenResource, onShowResourceInFolder, onDeleteResource, onEditResourceTags, onDownloadResource,
 }) {
   const [trashOpen, setTrashOpen] = useState(false)
+  const [resourceQuery, setResourceQuery] = useState('')
+  const [activeTags, setActiveTags] = useState([])
 
   useEffect(() => {
     if (trashedNotes.length === 0) setTrashOpen(false)
   }, [trashedNotes.length])
+
+  useEffect(() => {
+    setActiveTags(prev => prev.filter(t => allTags.includes(t)))
+  }, [allTags])
+
+  const filteredResources = useMemo(() => {
+    const q = resourceQuery.trim().toLowerCase()
+    return resources.filter(r => {
+      if (q && !r.displayName.toLowerCase().includes(q)) return false
+      if (activeTags.length > 0 && !activeTags.every(t => r.tags?.includes(t))) return false
+      return true
+    })
+  }, [resources, resourceQuery, activeTags])
+
+  const toggleTag = (t) => {
+    setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  }
 
   const fmt = (ts) => {
     if (!ts) return ''
@@ -89,6 +112,79 @@ export default function Sidebar({
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="resource-section">
+        <div className="resource-section-header">
+          <span className="resource-section-title">資料箱 {resources.length > 0 && <em>{resources.length}</em>}</span>
+          {resourcesSupported && (
+            <>
+              <button
+                className="resource-add-btn"
+                onClick={onAddFiles}
+                aria-label="ファイルを追加"
+                title="ファイルを追加"
+              >＋ファイル</button>
+              <button
+                className="resource-add-btn"
+                onClick={onAddFolder}
+                aria-label="フォルダを追加"
+                title="フォルダを追加"
+              >＋フォルダ</button>
+            </>
+          )}
+        </div>
+
+        {!resourcesSupported && (
+          <p className="empty">このブラウザでは資料箱機能は使えません<small>Chrome / Edge または デスクトップ版をご利用ください</small></p>
+        )}
+
+        {resourcesSupported && resources.length === 0 && (
+          <p className="empty">資料がありません<small>＋ボタンまたは D&D で追加</small></p>
+        )}
+
+        {resourcesSupported && resources.length > 0 && (
+          <>
+            <input
+              className="resource-search"
+              type="text"
+              placeholder="資料を検索…"
+              value={resourceQuery}
+              onChange={(e) => setResourceQuery(e.target.value)}
+            />
+            {allTags.length > 0 && (
+              <div className="resource-tag-filter">
+                {allTags.map(t => (
+                  <button
+                    key={t}
+                    className={`resource-tag-chip${activeTags.includes(t) ? ' active' : ''}`}
+                    onClick={() => toggleTag(t)}
+                    aria-pressed={activeTags.includes(t)}
+                  >
+                    #{t}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="resource-list" role="list">
+              {filteredResources.length === 0 && (
+                <p className="empty small">該当する資料がありません</p>
+              )}
+              {filteredResources.map(r => (
+                <ResourceItem
+                  key={r.id}
+                  item={r}
+                  isElectron={isElectron}
+                  onOpen={onOpenResource}
+                  onShowInFolder={onShowResourceInFolder}
+                  onDelete={onDeleteResource}
+                  onEditTags={onEditResourceTags}
+                  onDownload={onDownloadResource}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {trashedNotes.length > 0 && (

@@ -11,13 +11,11 @@ function migrateLegacyCheckbox(ops) {
     const op = ops[i]
     if (op.insert && typeof op.insert === 'object' && 'checkbox' in op.insert) {
       const listType = op.insert.checkbox ? 'unchecked' : 'checked'
-      // 次の op がテキスト（改行を含む行）なら結合
       const next = ops[i + 1]
       if (next && typeof next.insert === 'string') {
         const text = next.insert
         const nlIdx = text.indexOf('\n')
         if (nlIdx !== -1) {
-          // 改行より前のテキスト
           const before = text.slice(0, nlIdx + 1)
           const after = text.slice(nlIdx + 1)
           result.push({ insert: before, attributes: { ...(next.attributes ?? {}), list: listType } })
@@ -26,7 +24,6 @@ function migrateLegacyCheckbox(ops) {
           continue
         }
       }
-      // 対応する行 op がない場合はスキップ
       i++
       continue
     }
@@ -36,11 +33,13 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
+  const onResourceClickRef = useRef(onResourceClick)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
+  useEffect(() => { onResourceClickRef.current = onResourceClick }, [onResourceClick])
 
   useImperativeHandle(ref, () => ({
     getHTML() {
@@ -55,6 +54,21 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
     focus() {
       quillRef.current?.focus()
     },
+    getSelection() {
+      return quillRef.current?.getSelection() ?? null
+    },
+    restoreSelection(range) {
+      if (range && quillRef.current) {
+        quillRef.current.setSelection(range.index, range.length)
+      }
+    },
+    insertLink(text, url, range) {
+      const q = quillRef.current
+      if (!q) return
+      const idx = range?.index ?? (q.getSelection()?.index ?? q.getLength() - 1)
+      q.insertText(idx, text, 'link', url, Quill.sources.USER)
+      q.setSelection(idx + text.length, 0)
+    },
   }))
 
   // Initialize Quill once
@@ -63,9 +77,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
 
     const quill = new Quill(containerRef.current, {
       theme: 'snow',
-      modules: {
-        toolbar: false,
-      },
+      modules: { toolbar: false },
       readOnly,
       placeholder: readOnly ? '' : '書き始めましょう…',
     })
@@ -75,6 +87,15 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         onChangeRef.current(JSON.stringify(quill.getContents()))
       })
     }
+
+    // qmres: リンクのクリックをインターセプト
+    quill.root.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="qmres:"]')
+      if (!a) return
+      e.preventDefault()
+      const id = a.getAttribute('href').slice('qmres:'.length)
+      onResourceClickRef.current?.(id)
+    })
 
     quillRef.current = quill
   }, [])

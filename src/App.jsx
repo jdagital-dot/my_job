@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from './useAuth'
 import { useNotes } from './useNotes'
+import { useResources } from './useResources'
 import Editor from './Editor'
 import Sidebar from './Sidebar'
+import ConfirmDialog from './ConfirmDialog'
+import ResourcePicker from './ResourcePicker'
 import './App.css'
 
 const LAST_NOTE_KEY = 'qm_last_note'
@@ -36,6 +39,14 @@ export default function App() {
     getHistory, saveHistory,
   } = useNotes(user?.uid)
 
+  const {
+    resources, allTags, isElectron, hasFSAccess, supported: resourcesSupported,
+    addFiles, addFolder, addFromDataTransfer,
+    updateResource, removeResource,
+    openResource, showInFolder, downloadResource,
+    getResource,
+  } = useResources()
+
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [sidebarOpen, setSidebarOpen]     = useState(false)
   const [saveStatus, setSaveStatus]       = useState('')
@@ -48,6 +59,10 @@ export default function App() {
   const [secondNoteId, setSecondNoteId] = useState(null)
   const [editorKey2, setEditorKey2] = useState(0)
   const [focusedPane, setFocusedPane] = useState('left')
+  const [confirm, setConfirm]           = useState(null)
+  const [pickerOpen, setPickerOpen]     = useState(false)
+  const [toastMsg, setToastMsg]         = useState('')
+  const savedSelectionRef = useRef(null)
 
   const editorRef  = useRef(null)
   const editorRef2 = useRef(null)
@@ -181,6 +196,11 @@ export default function App() {
     }
   }, [doSave2])
 
+  const showToast = useCallback((msg) => {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(''), 3000)
+  }, [])
+
   // Apply format to focused pane
   const applyFormat = useCallback((name, value) => {
     const editor = shortcutRef.current.focusedPane === 'right' ? editorRef2.current : editorRef.current
@@ -191,7 +211,7 @@ export default function App() {
   }, [])
 
   // Always keep shortcutRef current
-  shortcutRef.current = { editorRef, editorRef2, setPreview, focusedPane, openHistory: null }
+  shortcutRef.current = { editorRef, editorRef2, setPreview, focusedPane, openHistory: null, openPicker: null }
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -213,6 +233,7 @@ export default function App() {
         case 'O': e.preventDefault(); fmt('list', 'ordered'); break
         case 'X': e.preventDefault(); fmt('list', 'unchecked'); break
         case 'Y': e.preventDefault(); shortcutRef.current.openHistory?.(); break
+        case 'L': e.preventDefault(); shortcutRef.current.openPicker?.(); break
         case 'P': e.preventDefault(); setPreview(v => !v); break
         default: break
       }
@@ -239,13 +260,21 @@ export default function App() {
     setPreview(false)
   }
 
-  const handleDeleteNote = async (id) => {
-    await deleteNote(id)
-    if (currentNoteId === id) {
-      const remaining = activeNotes.filter(n => n.id !== id)
-      if (remaining.length > 0) { setCurrentNoteId(remaining[0].id); setEditorKey(k => k + 1) }
-      else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
-    }
+  const handleDeleteNote = (id) => {
+    const note = notes.find(n => n.id === id)
+    setConfirm({
+      title: 'メモを削除', danger: true,
+      message: `「${note?.title || '無題'}」をゴミ箱に移動しますか？`,
+      confirmLabel: '削除',
+      onConfirm: async () => {
+        await deleteNote(id)
+        if (currentNoteId === id) {
+          const remaining = activeNotes.filter(n => n.id !== id)
+          if (remaining.length > 0) { setCurrentNoteId(remaining[0].id); setEditorKey(k => k + 1) }
+          else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
+        }
+      },
+    })
   }
 
   const handleToggleSplit = () => {
@@ -266,12 +295,60 @@ export default function App() {
 
   const handleRestoreNote = async (id) => { await restoreNote(id) }
 
-  const handlePermanentDeleteNote = async (id) => {
-    await permanentDeleteNote(id)
-    if (currentNoteId === id) {
-      if (activeNotes.length > 0) { setCurrentNoteId(activeNotes[0].id); setEditorKey(k => k + 1) }
-      else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
+  const handlePermanentDeleteNote = (id) => {
+    const note = notes.find(n => n.id === id)
+    setConfirm({
+      title: '完全削除', danger: true,
+      message: `「${note?.title || '無題'}」を完全に削除しますか？この操作は取り消せません。`,
+      confirmLabel: '完全削除',
+      onConfirm: async () => {
+        await permanentDeleteNote(id)
+        if (currentNoteId === id) {
+          if (activeNotes.length > 0) { setCurrentNoteId(activeNotes[0].id); setEditorKey(k => k + 1) }
+          else { const newId = await createNote(); setCurrentNoteId(newId); setEditorKey(k => k + 1) }
+        }
+      },
+    })
+  }
+
+  const handleOpenResourcePicker = useCallback(() => {
+    const editor = (shortcutRef.current.focusedPane === 'right' ? editorRef2 : editorRef).current
+    savedSelectionRef.current = editor?.getSelection() ?? null
+    setPickerOpen(true)
+  }, [])
+  shortcutRef.current.openPicker = handleOpenResourcePicker
+
+  const handlePickResource = (item) => {
+    setPickerOpen(false)
+    const editor = (shortcutRef.current.focusedPane === 'right' ? editorRef2 : editorRef).current
+    if (editor) editor.insertLink(item.displayName, `qmres:${item.id}`, savedSelectionRef.current)
+  }
+
+  const handleResourceClick = useCallback(async (id) => {
+    const item = getResource(id)
+    if (!item) { showToast('この資料は削除されました'); return }
+    const result = await openResource(item)
+    if (!result?.ok) {
+      if (result?.reason === 'folder-web-unsupported') showToast('フォルダはブラウザから直接開けません')
+      else if (result?.reason === 'denied') showToast('ファイルへのアクセスが拒否されました')
+      else showToast('ファイルを開けませんでした')
     }
+  }, [getResource, openResource, showToast])
+
+  const handleDeleteResource = (item) => {
+    setConfirm({
+      title: '資料を削除', danger: true,
+      message: `「${item.displayName}」の参照を削除しますか？（ファイル本体は削除されません）`,
+      confirmLabel: '削除',
+      onConfirm: () => removeResource(item.id),
+    })
+  }
+
+  const handleEditResourceTags = (item) => {
+    const input = window.prompt('タグを編集（カンマ区切り）', (item.tags || []).join(', '))
+    if (input === null) return
+    const tags = input.split(',').map(t => t.trim()).filter(Boolean)
+    updateResource(item.id, { tags })
   }
 
   const handleOpenHistory = () => {
@@ -324,7 +401,10 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); addFromDataTransfer(e.dataTransfer) }}
+    >
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
       {historyPanelOpen && <div className="overlay" onClick={() => setHistoryPanelOpen(false)} />}
 
@@ -338,6 +418,24 @@ export default function App() {
         onDelete={handleDeleteNote}
         onRestore={handleRestoreNote}
         onPermanentDelete={handlePermanentDeleteNote}
+        resources={resources}
+        allTags={allTags}
+        resourcesSupported={resourcesSupported}
+        isElectron={isElectron}
+        onAddFiles={addFiles}
+        onAddFolder={addFolder}
+        onOpenResource={async (item) => {
+          const r = await openResource(item)
+          if (!r?.ok) {
+            if (r?.reason === 'folder-web-unsupported') showToast('フォルダはブラウザから直接開けません')
+            else if (r?.reason === 'denied') showToast('ファイルへのアクセスが拒否されました')
+            else showToast('ファイルを開けませんでした')
+          }
+        }}
+        onShowResourceInFolder={showInFolder}
+        onDeleteResource={handleDeleteResource}
+        onEditResourceTags={handleEditResourceTags}
+        onDownloadResource={downloadResource}
       />
 
       {/* History panel */}
@@ -411,7 +509,8 @@ export default function App() {
                   style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
                   <Editor ref={editorRef} key={editorKey}
                     noteId={currentNoteId} content={currentNote.content}
-                    onChange={handleContentChange} />
+                    onChange={handleContentChange}
+                    onResourceClick={handleResourceClick} />
                 </div>
                 {preview && (
                   <div className="preview-area ql-editor"
@@ -444,7 +543,8 @@ export default function App() {
               {secondNote ? (
                 <Editor ref={editorRef2} key={editorKey2}
                   noteId={secondNoteId} content={secondNote.content}
-                  onChange={handleContentChange2} />
+                  onChange={handleContentChange2}
+                  onResourceClick={handleResourceClick} />
               ) : (
                 <div className="loading">メモを選択してください</div>
               )}
@@ -482,6 +582,25 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      <ResourcePicker
+        open={pickerOpen}
+        resources={resources}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handlePickResource}
+      />
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={() => { confirm?.onConfirm?.(); setConfirm(null) }}
+        onCancel={() => setConfirm(null)}
+      />
+
+      {toastMsg && <div className="toast">{toastMsg}</div>}
     </div>
   )
 }
