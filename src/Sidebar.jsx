@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import ResourceItem from './ResourceItem'
+import { fmtDate } from './dateUtils'
 
 function NoteIcon() {
   return (
@@ -74,12 +75,6 @@ export default function Sidebar({
     setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
   }
 
-  const fmt = (ts) => {
-    if (!ts) return ''
-    const d = ts.toDate ? ts.toDate() : new Date(ts)
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-  }
-
   return (
     <aside className={`sidebar${open ? ' open' : ''}`} aria-label="メモ一覧">
       <div className="sidebar-header">
@@ -101,7 +96,7 @@ export default function Sidebar({
             <span className="note-icon"><NoteIcon /></span>
             <div className="note-info">
               <div className="note-title">{n.title || '無題'}</div>
-              <div className="note-date">{fmt(n.updatedAt)}</div>
+              <div className="note-date">{fmtDate(n.updatedAt)}</div>
             </div>
             <button
               className="delete-btn"
@@ -203,7 +198,7 @@ export default function Sidebar({
                 <div key={n.id} className="note-item trash-item" role="listitem">
                   <div className="note-info">
                     <div className="note-title">{n.title || '無題'}</div>
-                    <div className="note-date">{fmt(n.deletedAt)}</div>
+                    <div className="note-date">{fmtDate(n.deletedAt)}</div>
                   </div>
                   <div className="trash-actions">
                     <button

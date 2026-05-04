@@ -7,15 +7,10 @@ import Sidebar from './Sidebar'
 import ConfirmDialog from './ConfirmDialog'
 import ResourcePicker from './ResourcePicker'
 import './App.css'
+import { fmtDate } from './dateUtils'
 
 const LAST_NOTE_KEY = 'qm_last_note'
 const SAVE_DELAY = 1500
-
-const fmtDate = (iso) => {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-}
 
 // Quill が生成する HTML に限定したサニタイザ
 // script タグ・インラインハンドラ・javascript: URL を除去する
@@ -148,77 +143,68 @@ export default function App() {
     if (currentNoteId) localStorage.setItem(LAST_NOTE_KEY, currentNoteId)
   }, [currentNoteId])
 
-  // Left pane save
-  const doSave = useCallback(async (content) => {
-    const id = currentNoteIdRef.current
-    if (!id || isSavingRef.current) return
-    isSavingRef.current = true
-    try {
-      const title = extractTitle(content)
-      await updateNote(id, { title, content })
-      saveHistory(id, { content, title, savedAt: new Date().toISOString() })
-      setSaveStatus('saved')
-      setTimeout(() => setSaveStatus(''), 2000)
-    } finally {
-      isSavingRef.current = false
-      if (pendingContentRef.current) {
-        const next = pendingContentRef.current
-        pendingContentRef.current = null
-        doSave(next)
+  // 共通セーブファクトリ（左右ペイン共用）
+  const savedStatusTimerRef  = useRef(null)
+  const savedStatusTimerRef2 = useRef(null)
+
+  const makeSavePipeline = useCallback((idRef, isSavingRef, pendingRef, statusSetter, statusTimerRef) => {
+    const doSave = async (content) => {
+      const id = idRef.current
+      if (!id || isSavingRef.current) return
+      isSavingRef.current = true
+      try {
+        const title = extractTitle(content)
+        await updateNote(id, { title, content })
+        saveHistory(id, { content, title, savedAt: new Date().toISOString() })
+        statusSetter('saved')
+        clearTimeout(statusTimerRef.current)
+        statusTimerRef.current = setTimeout(() => statusSetter(''), 2000)
+      } finally {
+        isSavingRef.current = false
+        if (pendingRef.current) {
+          const next = pendingRef.current
+          pendingRef.current = null
+          doSave(next)
+        }
       }
     }
+    const handleChange = (content) => {
+      pendingRef.current = content
+      statusSetter('saving')
+    }
+    const flush = (timerRef) => {
+      if (pendingRef.current) {
+        clearTimeout(timerRef.current)
+        doSave(pendingRef.current)
+        pendingRef.current = null
+      }
+    }
+    return { doSave, handleChange, flush }
   }, [updateNote, saveHistory])
+
+  const leftPipe  = useMemo(() => makeSavePipeline(
+    currentNoteIdRef, isSavingRef, pendingContentRef, setSaveStatus, savedStatusTimerRef
+  ), [makeSavePipeline])
+
+  const rightPipe = useMemo(() => makeSavePipeline(
+    secondNoteIdRef, isSavingRef2, pendingContentRef2, setSaveStatus2, savedStatusTimerRef2
+  ), [makeSavePipeline])
 
   const handleContentChange = useCallback((content) => {
-    pendingContentRef.current = content
+    leftPipe.handleChange(content)
     clearTimeout(saveTimerRef.current)
-    setSaveStatus('saving')
-    saveTimerRef.current = setTimeout(() => doSave(content), SAVE_DELAY)
-  }, [doSave])
+    saveTimerRef.current = setTimeout(() => leftPipe.doSave(content), SAVE_DELAY)
+  }, [leftPipe])
 
-  const flushSave = useCallback(() => {
-    if (pendingContentRef.current) {
-      clearTimeout(saveTimerRef.current)
-      doSave(pendingContentRef.current)
-      pendingContentRef.current = null
-    }
-  }, [doSave])
-
-  // Right pane save
-  const doSave2 = useCallback(async (content) => {
-    const id = secondNoteIdRef.current
-    if (!id || isSavingRef2.current) return
-    isSavingRef2.current = true
-    try {
-      const title = extractTitle(content)
-      await updateNote(id, { title, content })
-      saveHistory(id, { content, title, savedAt: new Date().toISOString() })
-      setSaveStatus2('saved')
-      setTimeout(() => setSaveStatus2(''), 2000)
-    } finally {
-      isSavingRef2.current = false
-      if (pendingContentRef2.current) {
-        const next = pendingContentRef2.current
-        pendingContentRef2.current = null
-        doSave2(next)
-      }
-    }
-  }, [updateNote, saveHistory])
+  const flushSave = useCallback(() => leftPipe.flush(saveTimerRef), [leftPipe])
 
   const handleContentChange2 = useCallback((content) => {
-    pendingContentRef2.current = content
+    rightPipe.handleChange(content)
     clearTimeout(saveTimerRef2.current)
-    setSaveStatus2('saving')
-    saveTimerRef2.current = setTimeout(() => doSave2(content), SAVE_DELAY)
-  }, [doSave2])
+    saveTimerRef2.current = setTimeout(() => rightPipe.doSave(content), SAVE_DELAY)
+  }, [rightPipe])
 
-  const flushSave2 = useCallback(() => {
-    if (pendingContentRef2.current) {
-      clearTimeout(saveTimerRef2.current)
-      doSave2(pendingContentRef2.current)
-      pendingContentRef2.current = null
-    }
-  }, [doSave2])
+  const flushSave2 = useCallback(() => rightPipe.flush(saveTimerRef2), [rightPipe])
 
   const showToast = useCallback((msg) => {
     setToastMsg(msg)
