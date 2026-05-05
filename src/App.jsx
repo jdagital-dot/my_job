@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './useAuth'
 import { useNotes } from './useNotes'
 import { useResources } from './useResources'
