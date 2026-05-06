@@ -29,6 +29,17 @@ class TagBlot extends Inline {
 
 Quill.register(TagBlot)
 
+function formatTagDisplay(tagText, type) {
+  if (type === 'time') {
+    const m = tagText.match(/^@(?:(\d+)h)?(?:(\d+)m)?$/)
+    const h = m[1] ? parseInt(m[1]) : 0
+    const min = m[2] ? parseInt(m[2]) : 0
+    return (h ? `${h}時間` : '') + (min ? `${min}分` : '')
+  }
+  const m = tagText.match(/^\/(\d{2})(\d{2})$/)
+  return `${parseInt(m[1])}月${parseInt(m[2])}日`
+}
+
 // 旧形式 {"insert":{"checkbox":true/false}} を Quill ネイティブの list: unchecked/checked に変換
 function migrateLegacyCheckbox(ops) {
   if (!Array.isArray(ops)) return ops
@@ -171,8 +182,10 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         const tagText = match[0]
         const tagStart = pos - tagText.length
         const type = tagText.startsWith('@') ? 'time' : 'deadline'
+        const displayText = formatTagDisplay(tagText, type)
 
-        quill.formatText(tagStart, tagText.length, 'tag', type, Quill.sources.API)
+        quill.deleteText(tagStart, tagText.length, Quill.sources.API)
+        quill.insertText(tagStart, displayText, { tag: type }, Quill.sources.API)
       })
     }
 
