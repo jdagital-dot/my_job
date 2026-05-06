@@ -86,6 +86,30 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
       quill.on('text-change', () => {
         onChangeRef.current(JSON.stringify(quill.getContents()))
       })
+
+      quill.on('text-change', (delta, _old, source) => {
+        if (source !== Quill.sources.USER) return
+        const ops = delta.ops
+        let retainCount = 0
+        let matched = false
+        if (ops.length === 1 && ops[0].insert === '\n') {
+          matched = true
+        } else if (ops.length === 2 && ops[0].retain != null && typeof ops[1].insert === 'string' && ops[1].insert === '\n') {
+          retainCount = ops[0].retain
+          matched = true
+        }
+        if (!matched || retainCount === 0) return
+
+        const [firstLine] = quill.getLine(0)
+        if (!firstLine || quill.getIndex(firstLine) !== 0) return
+        if (firstLine.length() !== retainCount + 1) return
+        if (quill.getFormat(0, 1).list) return
+
+        const [secondLine] = quill.getLine(retainCount + 1)
+        if (!secondLine || secondLine.length() !== 1) return
+
+        quill.formatLine(retainCount + 1, 1, { list: 'unchecked' }, Quill.sources.API)
+      })
     }
 
     // qmres: リンクのクリックをインターセプト
