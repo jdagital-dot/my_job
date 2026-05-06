@@ -2,6 +2,33 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
+const Inline = Quill.import('blots/inline')
+
+class TagBlot extends Inline {
+  static blotName = 'tag'
+  static tagName = 'span'
+
+  static create(value) {
+    const node = super.create()
+    node.setAttribute('data-tag-type', value)
+    return node
+  }
+
+  static formats(node) {
+    return node.getAttribute('data-tag-type')
+  }
+
+  format(name, value) {
+    if (name === 'tag' && value) {
+      this.domNode.setAttribute('data-tag-type', value)
+    } else {
+      super.format(name, value)
+    }
+  }
+}
+
+Quill.register(TagBlot)
+
 // 旧形式 {"insert":{"checkbox":true/false}} を Quill ネイティブの list: unchecked/checked に変換
 function migrateLegacyCheckbox(ops) {
   if (!Array.isArray(ops)) return ops
@@ -116,6 +143,36 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         if (prevLineFmt.header || prevLineFmt.list) return
 
         quill.formatLine(retainCount + 1, 1, { list: 'unchecked' }, Quill.sources.API)
+      })
+
+      quill.on('text-change', (delta, _old, source) => {
+        if (source !== Quill.sources.USER) return
+
+        const ops = delta.ops
+        let pos = 0
+        let triggered = false
+        if (ops.length === 1 && (ops[0].insert === ' ' || ops[0].insert === '\n')) {
+          triggered = true
+        } else if (ops.length === 2 && ops[0].retain != null &&
+                   (ops[1].insert === ' ' || ops[1].insert === '\n')) {
+          pos = ops[0].retain
+          triggered = true
+        }
+        if (!triggered || pos === 0) return
+
+        const fullText = quill.getText(0, pos)
+        const lineText = fullText.includes('\n')
+          ? fullText.slice(fullText.lastIndexOf('\n') + 1)
+          : fullText
+
+        const match = lineText.match(/(@(?:\d+h\d+m|\d+h|\d+m)|\/\d{4})$/)
+        if (!match) return
+
+        const tagText = match[0]
+        const tagStart = pos - tagText.length
+        const type = tagText.startsWith('@') ? 'time' : 'deadline'
+
+        quill.formatText(tagStart, tagText.length, 'tag', type, Quill.sources.API)
       })
     }
 

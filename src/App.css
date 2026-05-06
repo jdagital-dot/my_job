@@ -569,3 +569,21 @@ body {
 /* Quill 内の資料リンク装飾 */
 .ql-editor a[href^="qmres:"] { color: #2563eb; }
 .ql-editor a[href^="qmres:"]:before { content: "📎\00a0"; font-style: normal; }
+
+/* ── インラインタグバッジ ── */
+.ql-editor span[data-tag-type="time"] {
+  background: #fff3e0;
+  color: #bf5000;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 0.82em;
+  font-weight: 600;
+}
+.ql-editor span[data-tag-type="deadline"] {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 0.82em;
+  font-weight: 600;
+}
