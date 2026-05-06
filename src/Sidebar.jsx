@@ -1,3 +1,7 @@
+import { useState, useEffect, useMemo } from 'react'
+import ResourceItem from './ResourceItem'
+import { fmtDate } from './dateUtils'
+
 function NoteIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -18,11 +22,57 @@ function CloseIcon() {
   )
 }
 
-export default function Sidebar({ open, notes, currentNoteId, onSelect, onNew, onDelete }) {
-  const fmt = (ts) => {
-    if (!ts) return ''
-    const d = ts.toDate ? ts.toDate() : new Date(ts)
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+function RestoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6"/>
+      <path d="M14 11v6"/>
+    </svg>
+  )
+}
+
+export default function Sidebar({
+  open, notes, trashedNotes, currentNoteId,
+  onSelect, onNew, onDelete,
+  onRestore, onPermanentDelete,
+  resources = [], allTags = [], resourcesSupported = false, isElectron = false,
+  onAddFiles, onAddFolder,
+  onOpenResource, onShowResourceInFolder, onDeleteResource, onEditResourceTags, onDownloadResource,
+}) {
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [resourceQuery, setResourceQuery] = useState('')
+  const [activeTags, setActiveTags] = useState([])
+
+  useEffect(() => {
+    if (trashedNotes.length === 0) setTrashOpen(false)
+  }, [trashedNotes.length])
+
+  useEffect(() => {
+    setActiveTags(prev => prev.filter(t => allTags.includes(t)))
+  }, [allTags])
+
+  const filteredResources = useMemo(() => {
+    const q = resourceQuery.trim().toLowerCase()
+    return resources.filter(r => {
+      if (q && !r.displayName.toLowerCase().includes(q)) return false
+      if (activeTags.length > 0 && !activeTags.every(t => r.tags?.includes(t))) return false
+      return true
+    })
+  }, [resources, resourceQuery, activeTags])
+
+  const toggleTag = (t) => {
+    setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
   }
 
   return (
@@ -46,7 +96,7 @@ export default function Sidebar({ open, notes, currentNoteId, onSelect, onNew, o
             <span className="note-icon"><NoteIcon /></span>
             <div className="note-info">
               <div className="note-title">{n.title || '無題'}</div>
-              <div className="note-date">{fmt(n.updatedAt)}</div>
+              <div className="note-date">{fmtDate(n.updatedAt)}</div>
             </div>
             <button
               className="delete-btn"
@@ -58,6 +108,120 @@ export default function Sidebar({ open, notes, currentNoteId, onSelect, onNew, o
           </div>
         ))}
       </div>
+
+      <div className="resource-section">
+        <div className="resource-section-header">
+          <span className="resource-section-title">資料箱 {resources.length > 0 && <em>{resources.length}</em>}</span>
+          {resourcesSupported && (
+            <>
+              <button
+                className="resource-add-btn"
+                onClick={onAddFiles}
+                aria-label="ファイルを追加"
+                title="ファイルを追加"
+              >＋ファイル</button>
+              <button
+                className="resource-add-btn"
+                onClick={onAddFolder}
+                aria-label="フォルダを追加"
+                title="フォルダを追加"
+              >＋フォルダ</button>
+            </>
+          )}
+        </div>
+
+        {!resourcesSupported && (
+          <p className="empty">このブラウザでは資料箱機能は使えません<small>Chrome / Edge または デスクトップ版をご利用ください</small></p>
+        )}
+
+        {resourcesSupported && resources.length === 0 && (
+          <p className="empty">資料がありません<small>＋ボタンまたは D&D で追加</small></p>
+        )}
+
+        {resourcesSupported && resources.length > 0 && (
+          <>
+            <input
+              className="resource-search"
+              type="text"
+              placeholder="資料を検索…"
+              value={resourceQuery}
+              onChange={(e) => setResourceQuery(e.target.value)}
+            />
+            {allTags.length > 0 && (
+              <div className="resource-tag-filter">
+                {allTags.map(t => (
+                  <button
+                    key={t}
+                    className={`resource-tag-chip${activeTags.includes(t) ? ' active' : ''}`}
+                    onClick={() => toggleTag(t)}
+                    aria-pressed={activeTags.includes(t)}
+                  >
+                    #{t}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="resource-list" role="list">
+              {filteredResources.length === 0 && (
+                <p className="empty small">該当する資料がありません</p>
+              )}
+              {filteredResources.map(r => (
+                <ResourceItem
+                  key={r.id}
+                  item={r}
+                  isElectron={isElectron}
+                  onOpen={onOpenResource}
+                  onShowInFolder={onShowResourceInFolder}
+                  onDelete={onDeleteResource}
+                  onEditTags={onEditResourceTags}
+                  onDownload={onDownloadResource}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {trashedNotes.length > 0 && (
+        <div className="trash-section">
+          <button
+            className="trash-toggle"
+            onClick={() => setTrashOpen(v => !v)}
+            aria-expanded={trashOpen}
+          >
+            <span className="trash-toggle-label">ゴミ箱 <em>{trashedNotes.length}</em></span>
+            <span className={`trash-chevron${trashOpen ? ' open' : ''}`}>›</span>
+          </button>
+          {trashOpen && (
+            <div className="trash-list" role="list">
+              {trashedNotes.map(n => (
+                <div key={n.id} className="note-item trash-item" role="listitem">
+                  <div className="note-info">
+                    <div className="note-title">{n.title || '無題'}</div>
+                    <div className="note-date">{fmtDate(n.deletedAt)}</div>
+                  </div>
+                  <div className="trash-actions">
+                    <button
+                      className="trash-action-btn restore-btn"
+                      onClick={() => onRestore(n.id)}
+                      aria-label={`「${n.title || '無題'}」を復元`}
+                    >
+                      <RestoreIcon />
+                    </button>
+                    <button
+                      className="trash-action-btn perm-delete-btn"
+                      onClick={() => onPermanentDelete(n.id)}
+                      aria-label={`「${n.title || '無題'}」を完全削除`}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <button className="new-note-btn" onClick={onNew} aria-label="新規メモを作成">
         ＋ 新規メモ

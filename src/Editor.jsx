@@ -2,6 +2,33 @@ import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
+const Inline = Quill.import('blots/inline')
+
+class TagBlot extends Inline {
+  static blotName = 'tag'
+  static tagName = 'span'
+
+  static create(value) {
+    const node = super.create()
+    node.setAttribute('data-tag-type', value)
+    return node
+  }
+
+  static formats(node) {
+    return node.getAttribute('data-tag-type')
+  }
+
+  format(name, value) {
+    if (name === 'tag' && value) {
+      this.domNode.setAttribute('data-tag-type', value)
+    } else {
+      super.format(name, value)
+    }
+  }
+}
+
+Quill.register(TagBlot)
+
 // 旧形式 {"insert":{"checkbox":true/false}} を Quill ネイティブの list: unchecked/checked に変換
 function migrateLegacyCheckbox(ops) {
   if (!Array.isArray(ops)) return ops
@@ -11,13 +38,11 @@ function migrateLegacyCheckbox(ops) {
     const op = ops[i]
     if (op.insert && typeof op.insert === 'object' && 'checkbox' in op.insert) {
       const listType = op.insert.checkbox ? 'unchecked' : 'checked'
-      // 次の op がテキスト（改行を含む行）なら結合
       const next = ops[i + 1]
       if (next && typeof next.insert === 'string') {
         const text = next.insert
         const nlIdx = text.indexOf('\n')
         if (nlIdx !== -1) {
-          // 改行より前のテキスト
           const before = text.slice(0, nlIdx + 1)
           const after = text.slice(nlIdx + 1)
           result.push({ insert: before, attributes: { ...(next.attributes ?? {}), list: listType } })
@@ -26,7 +51,6 @@ function migrateLegacyCheckbox(ops) {
           continue
         }
       }
-      // 対応する行 op がない場合はスキップ
       i++
       continue
     }
@@ -36,16 +60,42 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
+  const onResourceClickRef = useRef(onResourceClick)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
+  useEffect(() => { onResourceClickRef.current = onResourceClick }, [onResourceClick])
 
   useImperativeHandle(ref, () => ({
     getHTML() {
       return quillRef.current?.root.innerHTML ?? ''
-    }
+    },
+    format(name, value) {
+      quillRef.current?.format(name, value)
+    },
+    getFormat() {
+      return quillRef.current?.getFormat() ?? {}
+    },
+    focus() {
+      quillRef.current?.focus()
+    },
+    getSelection() {
+      return quillRef.current?.getSelection() ?? null
+    },
+    restoreSelection(range) {
+      if (range && quillRef.current) {
+        quillRef.current.setSelection(range.index, range.length)
+      }
+    },
+    insertLink(text, url, range) {
+      const q = quillRef.current
+      if (!q) return
+      const idx = range?.index ?? (q.getSelection()?.index ?? q.getLength() - 1)
+      q.insertText(idx, text, 'link', url, Quill.sources.USER)
+      q.setSelection(idx + text.length, 0)
+    },
   }))
 
   // Initialize Quill once
@@ -54,17 +104,93 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange }, ref) {
 
     const quill = new Quill(containerRef.current, {
       theme: 'snow',
-      modules: {
-        toolbar: '#qm-toolbar',
-      },
-      placeholder: '書き始めましょう…',
+      modules: { toolbar: false },
+      readOnly,
+      placeholder: readOnly ? '' : '書き始めましょう…',
     })
 
-    quill.on('text-change', () => {
-      onChangeRef.current(JSON.stringify(quill.getContents()))
+    if (!readOnly) {
+      quill.on('text-change', () => {
+        onChangeRef.current(JSON.stringify(quill.getContents()))
+      })
+
+      quill.on('text-change', (delta, oldDelta, source) => {
+        if (source !== Quill.sources.USER) return
+
+        // 空のノートで最初の入力 → 1行目をH1に自動フォーマット
+        if (oldDelta.length() === 1 && !quill.getFormat(0, 1).header) {
+          quill.formatLine(0, 1, { header: 1 }, Quill.sources.API)
+        }
+
+        // 通常テキスト行（H1でもリストでもない）の末尾でEnter → チェックボックスを自動挿入
+        const ops = delta.ops
+        let retainCount = 0
+        let isEnter = false
+        if (ops.length === 1 && ops[0].insert === '\n') {
+          isEnter = true
+        } else if (ops.length === 2 && ops[0].retain != null && typeof ops[1].insert === 'string' && ops[1].insert === '\n') {
+          retainCount = ops[0].retain
+          isEnter = true
+        }
+        if (!isEnter || retainCount === 0) return
+
+        // 新しい行が空 = Enterが行末で押された（行中途は除外）
+        const [newLine] = quill.getLine(retainCount + 1)
+        if (!newLine || newLine.length() !== 1) return
+
+        // H1行またはリスト行の後はチェックボックス自動化しない
+        const prevLineFmt = quill.getFormat(retainCount - 1)
+        if (prevLineFmt.header || prevLineFmt.list) return
+
+        quill.formatLine(retainCount + 1, 1, { list: 'unchecked' }, Quill.sources.API)
+      })
+
+      quill.on('text-change', (delta, _old, source) => {
+        if (source !== Quill.sources.USER) return
+
+        const ops = delta.ops
+        let pos = 0
+        let triggered = false
+        if (ops.length === 1 && (ops[0].insert === ' ' || ops[0].insert === '\n')) {
+          triggered = true
+        } else if (ops.length === 2 && ops[0].retain != null &&
+                   (ops[1].insert === ' ' || ops[1].insert === '\n')) {
+          pos = ops[0].retain
+          triggered = true
+        }
+        if (!triggered || pos === 0) return
+
+        const fullText = quill.getText(0, pos)
+        const lineText = fullText.includes('\n')
+          ? fullText.slice(fullText.lastIndexOf('\n') + 1)
+          : fullText
+
+        const match = lineText.match(/(@(?:\d+h\d+m|\d+h|\d+m)|\/\d{4})$/)
+        if (!match) return
+
+        const tagText = match[0]
+        const tagStart = pos - tagText.length
+        const type = tagText.startsWith('@') ? 'time' : 'deadline'
+
+        quill.formatText(tagStart, tagText.length, 'tag', type, Quill.sources.API)
+      })
+    }
+
+    // qmres: リンクのクリックをインターセプト
+    quill.root.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="qmres:"]')
+      if (!a) return
+      e.preventDefault()
+      const id = a.getAttribute('href').slice('qmres:'.length)
+      onResourceClickRef.current?.(id)
     })
 
     quillRef.current = quill
+
+    return () => {
+      quill.disable()
+      quillRef.current = null
+    }
   }, [])
 
   // Load content when note changes
