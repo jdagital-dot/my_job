@@ -88,6 +88,7 @@ export default function App() {
   const currentNoteIdRef  = useRef(currentNoteId)
   const secondNoteIdRef   = useRef(secondNoteId)
   const shortcutRef = useRef({})
+  const touchStartX = useRef(null)
 
   const pendingContentRef  = useRef(null)
   const saveTimerRef       = useRef(null)
@@ -210,6 +211,23 @@ export default function App() {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(''), 3000)
   }, [])
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX
+  }, [])
+
+  const handleTouchEnd = useCallback((e) => {
+    const startX = touchStartX.current
+    if (startX === null) return
+    const endX = e.changedTouches[0].clientX
+    const dx = endX - startX
+    if (!sidebarOpen && startX < 30 && dx > 60) {
+      setSidebarOpen(true)
+    } else if (sidebarOpen && dx < -60) {
+      setSidebarOpen(false)
+    }
+    touchStartX.current = null
+  }, [sidebarOpen])
 
   // Apply format to focused pane
   const applyFormat = useCallback((name, value) => {
@@ -425,6 +443,8 @@ export default function App() {
     <div className="app"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); addFromDataTransfer(e.dataTransfer) }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
       {historyPanelOpen && <div className="overlay" onClick={() => setHistoryPanelOpen(false)} />}
