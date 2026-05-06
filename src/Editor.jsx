@@ -87,26 +87,33 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         onChangeRef.current(JSON.stringify(quill.getContents()))
       })
 
-      quill.on('text-change', (delta, _old, source) => {
+      quill.on('text-change', (delta, oldDelta, source) => {
         if (source !== Quill.sources.USER) return
+
+        // 空のノートで最初の入力 → 1行目をH1に自動フォーマット
+        if (oldDelta.length() === 1 && !quill.getFormat(0, 1).header) {
+          quill.formatLine(0, 1, { header: 1 }, Quill.sources.API)
+        }
+
+        // 通常テキスト行（H1でもリストでもない）の末尾でEnter → チェックボックスを自動挿入
         const ops = delta.ops
         let retainCount = 0
-        let matched = false
+        let isEnter = false
         if (ops.length === 1 && ops[0].insert === '\n') {
-          matched = true
+          isEnter = true
         } else if (ops.length === 2 && ops[0].retain != null && typeof ops[1].insert === 'string' && ops[1].insert === '\n') {
           retainCount = ops[0].retain
-          matched = true
+          isEnter = true
         }
-        if (!matched || retainCount === 0) return
+        if (!isEnter || retainCount === 0) return
 
-        const [firstLine] = quill.getLine(0)
-        if (!firstLine || quill.getIndex(firstLine) !== 0) return
-        if (firstLine.length() !== retainCount + 1) return
-        if (quill.getFormat(0, 1).list) return
+        // 新しい行が空 = Enterが行末で押された（行中途は除外）
+        const [newLine] = quill.getLine(retainCount + 1)
+        if (!newLine || newLine.length() !== 1) return
 
-        const [secondLine] = quill.getLine(retainCount + 1)
-        if (!secondLine || secondLine.length() !== 1) return
+        // H1行またはリスト行の後はチェックボックス自動化しない
+        const prevLineFmt = quill.getFormat(retainCount - 1)
+        if (prevLineFmt.header || prevLineFmt.list) return
 
         quill.formatLine(retainCount + 1, 1, { list: 'unchecked' }, Quill.sources.API)
       })
