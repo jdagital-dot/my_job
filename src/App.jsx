@@ -6,6 +6,7 @@ import Editor from './Editor'
 import Sidebar from './Sidebar'
 import ConfirmDialog from './ConfirmDialog'
 import ResourcePicker from './ResourcePicker'
+import TaskPanel from './TaskPanel'
 import './App.css'
 import { fmtDate } from './dateUtils'
 
@@ -73,6 +74,7 @@ export default function App() {
   const [preview, setPreview]             = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
   const [historyEntries, setHistoryEntries]     = useState([])
+  const [taskPanelOpen, setTaskPanelOpen]       = useState(false)
   const [editorKey, setEditorKey]   = useState(0)
   const [splitMode, setSplitMode]   = useState(false)
   const [secondNoteId, setSecondNoteId] = useState(null)
@@ -448,6 +450,7 @@ export default function App() {
     >
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
       {historyPanelOpen && <div className="overlay" onClick={() => setHistoryPanelOpen(false)} />}
+      {taskPanelOpen && <div className="overlay" onClick={() => setTaskPanelOpen(false)} />}
 
       <Sidebar
         open={sidebarOpen}
@@ -477,6 +480,13 @@ export default function App() {
         onDeleteResource={handleDeleteResource}
         onEditResourceTags={handleEditResourceTags}
         onDownloadResource={downloadResource}
+      />
+
+      <TaskPanel
+        open={taskPanelOpen}
+        onClose={() => setTaskPanelOpen(false)}
+        notes={notes}
+        onNoteSelect={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
       />
 
       {/* History panel */}
@@ -526,6 +536,11 @@ export default function App() {
             {saveStatus === 'saving' && <span className="status-saving">● 保存中</span>}
             {saveStatus === 'saved'  && <span className="status-saved">● 保存済</span>}
           </div>
+          <button className="icon-btn" onClick={() => setTaskPanelOpen(true)} aria-label="タスク一覧">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="13" y2="18"/>
+            </svg>
+          </button>
           <button className={`icon-btn${splitMode ? ' active-btn' : ''}`} onClick={handleToggleSplit}
             aria-label="分割表示" aria-pressed={splitMode}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
