@@ -612,6 +612,7 @@ body {
 }
 .nlp-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .nlp-item-date { font-size: 0.72rem; color: #aaa; }
+.nlp-item-note { font-size: 0.7rem; color: #bbb; }
 @media (max-width: 640px) { .note-list-panel { width: 85%; } }
 
 /* ── Task Panel ── */

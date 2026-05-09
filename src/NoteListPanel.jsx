@@ -1,35 +1,58 @@
 import { useState, useMemo } from 'react'
-import { fmtDate } from './dateUtils'
 
-function extractBadges(content) {
-  const badges = []
-  try {
-    const parsed = JSON.parse(content)
-    const ops = parsed.ops ?? parsed
-    for (const op of ops) {
-      if (typeof op.insert === 'string' && op.attributes?.tag) {
-        badges.push({ text: op.insert, type: op.attributes.tag })
+function parseDateSortKey(deadlineText) {
+  const m = deadlineText.match(/(\d+)月(\d+)日/)
+  if (!m) return Infinity
+  const now = new Date()
+  let year = now.getFullYear()
+  const candidate = new Date(year, parseInt(m[1]) - 1, parseInt(m[2]))
+  if (candidate < now) year++
+  return new Date(year, parseInt(m[1]) - 1, parseInt(m[2])).getTime()
+}
+
+function extractTasks(notes) {
+  const tasks = []
+  for (const note of notes) {
+    if (!note.content || note.deleted) continue
+    try {
+      const ops = (JSON.parse(note.content).ops ?? JSON.parse(note.content))
+      let lineText = ''
+      for (const op of ops) {
+        if (typeof op.insert !== 'string') continue
+        if (op.attributes?.tag === 'deadline') {
+          tasks.push({
+            taskText: lineText.trim() || '（タスク名なし）',
+            deadline: op.insert,
+            noteId: note.id,
+            noteTitle: note.title || '無題',
+            sortKey: parseDateSortKey(op.insert),
+          })
+          lineText = ''
+        } else {
+          const nl = op.insert.lastIndexOf('\n')
+          lineText = nl >= 0 ? op.insert.slice(nl + 1) : lineText + op.insert
+        }
       }
-    }
-  } catch {}
-  return badges
+    } catch {}
+  }
+  return tasks.sort((a, b) => a.sortKey - b.sortKey)
 }
 
 export default function NoteListPanel({ open, onClose, notes, onNoteSelect }) {
   const [selectedId, setSelectedId] = useState(null)
 
-  const sorted = useMemo(() =>
-    [...notes]
-      .filter(n => !n.deleted)
-      .sort((a, b) => {
-        const ta = a.updatedAt?.toMillis?.() ?? new Date(a.updatedAt).getTime()
-        const tb = b.updatedAt?.toMillis?.() ?? new Date(b.updatedAt).getTime()
-        return tb - ta
-      }),
-    [notes]
-  )
+  const tasks = useMemo(() => extractTasks(notes), [notes])
 
-  const filtered = selectedId ? sorted.filter(n => n.id === selectedId) : sorted
+  const noteChips = useMemo(() => {
+    const seen = new Set()
+    return tasks.filter(t => {
+      if (seen.has(t.noteId)) return false
+      seen.add(t.noteId)
+      return true
+    }).map(t => ({ id: t.noteId, title: t.noteTitle }))
+  }, [tasks])
+
+  const filtered = selectedId ? tasks.filter(t => t.noteId === selectedId) : tasks
 
   return (
     <div className={`note-list-panel${open ? ' open' : ''}`} aria-label="ノート一覧">
@@ -47,34 +70,27 @@ export default function NoteListPanel({ open, onClose, notes, onNoteSelect }) {
           className={`resource-tag-chip${!selectedId ? ' active' : ''}`}
           onClick={() => setSelectedId(null)}
         >すべて</button>
-        {sorted.map(n => (
+        {noteChips.map(c => (
           <button
-            key={n.id}
-            className={`resource-tag-chip${selectedId === n.id ? ' active' : ''}`}
-            onClick={() => setSelectedId(prev => prev === n.id ? null : n.id)}
-          >
-            {n.title || '無題'}
-          </button>
+            key={c.id}
+            className={`resource-tag-chip${selectedId === c.id ? ' active' : ''}`}
+            onClick={() => setSelectedId(prev => prev === c.id ? null : c.id)}
+          >{c.title}</button>
         ))}
       </div>
 
       <div className="nlp-list">
         {filtered.length === 0
-          ? <div className="empty">ノートがありません</div>
-          : filtered.map(n => {
-              const badges = extractBadges(n.content)
-              return (
-                <div key={n.id} className="nlp-item" onClick={() => { onNoteSelect(n.id); onClose() }}>
-                  <div className="nlp-item-title">{n.title || '無題'}</div>
-                  <div className="nlp-item-meta">
-                    <span className="nlp-item-date">{fmtDate(n.updatedAt)}</span>
-                    {badges.map((b, i) => (
-                      <span key={i} data-tag-type={b.type}>{b.text}</span>
-                    ))}
-                  </div>
+          ? <div className="empty">期限タグのあるタスクがありません</div>
+          : filtered.map((t, i) => (
+              <div key={i} className="nlp-item" onClick={() => { onNoteSelect(t.noteId); onClose() }}>
+                <div className="nlp-item-title">{t.taskText}</div>
+                <div className="nlp-item-meta">
+                  <span className="nlp-item-note">{t.noteTitle}</span>
+                  <span data-tag-type="deadline">{t.deadline}</span>
                 </div>
-              )
-            })
+              </div>
+            ))
         }
       </div>
     </div>
