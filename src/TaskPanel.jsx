@@ -4,10 +4,14 @@ function parseDateSortKey(deadlineText) {
   const m = deadlineText.match(/(\d+)月(\d+)日/)
   if (!m) return Infinity
   const now = new Date()
-  let year = now.getFullYear()
-  const candidate = new Date(year, parseInt(m[1]) - 1, parseInt(m[2]))
-  if (candidate < now) year++
-  return new Date(year, parseInt(m[1]) - 1, parseInt(m[2])).getTime()
+  const year = now.getFullYear()
+  const month = parseInt(m[1]) - 1
+  const day = parseInt(m[2])
+  const thisYear = new Date(year, month, day)
+  if (now - thisYear > 60 * 24 * 60 * 60 * 1000) {
+    return new Date(year + 1, month, day).getTime()
+  }
+  return thisYear.getTime()
 }
 
 function extractTasks(notes) {
