@@ -295,6 +295,29 @@ export default function App() {
     }
   }
 
+  const handleTaskComplete = useCallback(async (groupOps) => {
+    const archiveNote = notes.find(n => !n.deleted && n.title === 'アーカイブ')
+    let archiveId
+    let existingOps = []
+
+    if (archiveNote) {
+      archiveId = archiveNote.id
+      try {
+        const parsed = JSON.parse(archiveNote.content)
+        existingOps = parsed.ops ?? parsed
+        if (existingOps.at(-1)?.insert === '\n') existingOps = existingOps.slice(0, -1)
+      } catch {}
+    } else {
+      archiveId = await createNote()
+    }
+
+    const newOps = existingOps.length > 0
+      ? [...existingOps, { insert: '\n' }, ...groupOps]
+      : groupOps
+
+    updateNote(archiveId, { title: 'アーカイブ', content: JSON.stringify({ ops: newOps }) })
+  }, [notes, createNote, updateNote])
+
   const handleDeleteNote = (id) => {
     const note = notes.find(n => n.id === id)
     setConfirm({
@@ -567,7 +590,8 @@ export default function App() {
                   <Editor ref={editorRef} key={editorKey}
                     noteId={currentNoteId} content={currentNote.content}
                     onChange={handleContentChange}
-                    onResourceClick={handleResourceClick} />
+                    onResourceClick={handleResourceClick}
+                    onTaskComplete={handleTaskComplete} />
                 </div>
                 {preview && (
                   <div className="preview-area ql-editor"
