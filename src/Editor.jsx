@@ -60,7 +60,7 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick, onTaskComplete }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
@@ -172,7 +172,56 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         const tagStart = pos - tagText.length
         const type = tagText.startsWith('@') ? 'time' : 'deadline'
 
-        quill.formatText(tagStart, tagText.length, 'tag', type, Quill.sources.API)
+        const displayText = formatTagDisplay(tagText, type)
+        quill.deleteText(tagStart, tagText.length, Quill.sources.API)
+        quill.insertText(tagStart, displayText, { tag: type }, Quill.sources.API)
+      })
+
+      quill.on('text-change', async (delta, _old, source) => {
+        if (source !== Quill.sources.USER) return
+
+        const hasCheckOn = delta.ops.some(op => op.attributes?.list === 'checked')
+        if (!hasCheckOn) return
+
+        const lines = quill.getLines(0, quill.getLength())
+        const lineInfos = lines.map(line => {
+          const idx = quill.getIndex(line)
+          const len = line.length()
+          const fmt = line.formats()
+          const lineDelta = quill.getContents(idx, len)
+          const hasDeadline = lineDelta.ops.some(op => op.attributes?.tag === 'deadline')
+          return { idx, len, isList: !!fmt.list, isChecked: fmt.list === 'checked', hasDeadline }
+        })
+
+        const groups = []
+        let i = 0
+        while (i < lineInfos.length) {
+          const line = lineInfos[i]
+          if (!line.isList && line.hasDeadline) {
+            const items = []
+            let j = i + 1
+            while (j < lineInfos.length && lineInfos[j].isList) {
+              items.push(j)
+              j++
+            }
+            if (items.length > 0) groups.push({ header: i, items })
+            i = j
+          } else {
+            i++
+          }
+        }
+
+        const completed = groups.filter(g => g.items.every(idx => lineInfos[idx].isChecked))
+        for (const g of [...completed].reverse()) {
+          const first = lineInfos[g.header]
+          const last = lineInfos[g.items[g.items.length - 1]]
+          const deleteLen = last.idx + last.len - first.idx
+          const groupOps = quill.getContents(first.idx, deleteLen).ops
+          const confirmed = await onTaskComplete?.(groupOps)
+          if (confirmed) {
+            quill.deleteText(first.idx, deleteLen, Quill.sources.API)
+          }
+        }
       })
     }
 

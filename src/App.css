@@ -566,6 +566,55 @@ body {
 }
 @keyframes fadeInUp { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* ── Note List Panel ── */
+.note-list-panel {
+  position: fixed;
+  top: env(safe-area-inset-top); right: 0; bottom: env(safe-area-inset-bottom);
+  width: 320px;
+  background: rgba(250,250,250,0.95);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(0,0,0,0.05);
+  display: flex; flex-direction: column; z-index: 100;
+  transform: translateX(100%);
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1);
+  box-shadow: -10px 0 30px -10px rgba(0,0,0,0.03);
+}
+.note-list-panel.open { transform: translateX(0); }
+.note-list-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 20px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.note-list-panel-title {
+  font-size: 0.7rem; font-weight: 700; color: #999;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.nlp-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+  max-height: 96px; overflow-y: auto;
+}
+.nlp-list { flex: 1; overflow-y: auto; padding: 8px 10px; }
+.nlp-item {
+  padding: 10px 14px; border-radius: 12px; cursor: pointer;
+  margin-bottom: 4px; border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+}
+.nlp-item:hover {
+  background: #fff; border-color: rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px -2px rgba(0,0,0,0.04);
+}
+.nlp-item-title {
+  font-size: 0.88rem; font-weight: 600; color: #111;
+  margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nlp-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.nlp-item-date { font-size: 0.72rem; color: #aaa; }
+.nlp-item-note { font-size: 0.7rem; color: #bbb; }
+@media (max-width: 640px) { .note-list-panel { width: 85%; } }
+
 /* Quill 内の資料リンク装飾 */
 .ql-editor a[href^="qmres:"] { color: #2563eb; }
 .ql-editor a[href^="qmres:"]:before { content: "📎\00a0"; font-style: normal; }
