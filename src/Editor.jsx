@@ -217,7 +217,9 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
           const last = lineInfos[g.items[g.items.length - 1]]
           const deleteLen = last.idx + last.len - first.idx
           const groupOps = quill.getContents(first.idx, deleteLen).ops
+          quill.disable()
           const confirmed = await onTaskComplete?.(groupOps)
+          quill.enable()
           if (confirmed) {
             quill.deleteText(first.idx, deleteLen, Quill.sources.API)
           }
