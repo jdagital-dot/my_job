@@ -314,28 +314,40 @@ export default function App() {
     }
   }
 
-  const handleTaskComplete = useCallback(async (groupOps) => {
-    const archiveNote = notes.find(n => !n.deleted && n.title === 'アーカイブ')
-    let archiveId
-    let existingOps = []
+  const handleTaskComplete = useCallback((groupOps) => {
+    return new Promise((resolve) => {
+      setConfirm({
+        title: 'タスク完了',
+        message: 'タスクを完了しますか？アーカイブノートに移動されます。',
+        confirmLabel: '完了・移動',
+        onConfirm: async () => {
+          const archiveNote = notes.find(n => !n.deleted && n.title === 'アーカイブ')
+          let archiveId
+          let existingOps = []
 
-    if (archiveNote) {
-      archiveId = archiveNote.id
-      try {
-        const parsed = JSON.parse(archiveNote.content)
-        existingOps = parsed.ops ?? parsed
-        if (existingOps.at(-1)?.insert === '\n') existingOps = existingOps.slice(0, -1)
-      } catch {}
-    } else {
-      archiveId = await createNote()
-    }
+          if (archiveNote) {
+            archiveId = archiveNote.id
+            try {
+              const parsed = JSON.parse(archiveNote.content)
+              existingOps = parsed.ops ?? parsed
+              if (existingOps.at(-1)?.insert === '\n') existingOps = existingOps.slice(0, -1)
+            } catch {}
+          } else {
+            archiveId = await createNote()
+          }
 
-    const newOps = existingOps.length > 0
-      ? [...existingOps, { insert: '\n' }, ...groupOps]
-      : groupOps
+          const newOps = existingOps.length > 0
+            ? [...existingOps, { insert: '\n' }, ...groupOps]
+            : groupOps
 
-    updateNote(archiveId, { title: 'アーカイブ', content: JSON.stringify({ ops: newOps }) })
+          updateNote(archiveId, { title: 'アーカイブ', content: JSON.stringify({ ops: newOps }) })
+          resolve(true)
+        },
+        onCancel: () => resolve(false),
+      })
+    })
   }, [notes, createNote, updateNote])
+
 
   const handleDeleteNote = (id) => {
     const note = notes.find(n => n.id === id)
@@ -748,7 +760,7 @@ export default function App() {
         confirmLabel={confirm?.confirmLabel}
         danger={confirm?.danger}
         onConfirm={() => { confirm?.onConfirm?.(); setConfirm(null) }}
-        onCancel={() => setConfirm(null)}
+        onCancel={() => { confirm?.onCancel?.(); setConfirm(null) }}
       />
 
       <TaskEditor

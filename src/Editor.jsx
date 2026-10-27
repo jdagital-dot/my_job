@@ -209,7 +209,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         quill.insertText(tagStart, displayText, { tag: type }, Quill.sources.API)
       })
 
-      quill.on('text-change', (delta, _old, source) => {
+      quill.on('text-change', async (delta, _old, source) => {
         if (source !== Quill.sources.USER) return
 
         const hasCheckOn = delta.ops.some(op => op.attributes?.list === 'checked')
@@ -220,16 +220,14 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
           const idx = quill.getIndex(line)
           const len = line.length()
           const fmt = line.formats()
-          const lineDelta = quill.getContents(idx, len)
-          const hasDeadline = lineDelta.ops.some(op => op.attributes?.tag === 'deadline')
-          return { idx, len, isList: !!fmt.list, isChecked: fmt.list === 'checked', hasDeadline }
+          return { idx, len, isList: !!fmt.list, isChecked: fmt.list === 'checked' }
         })
 
         const groups = []
         let i = 0
         while (i < lineInfos.length) {
           const line = lineInfos[i]
-          if (!line.isList && line.hasDeadline) {
+          if (!line.isList) {
             const items = []
             let j = i + 1
             while (j < lineInfos.length && lineInfos[j].isList) {
@@ -244,14 +242,16 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         }
 
         const completed = groups.filter(g => g.items.every(idx => lineInfos[idx].isChecked))
-        completed.reverse().forEach(g => {
+        for (const g of [...completed].reverse()) {
           const first = lineInfos[g.header]
           const last = lineInfos[g.items[g.items.length - 1]]
           const deleteLen = last.idx + last.len - first.idx
           const groupOps = quill.getContents(first.idx, deleteLen).ops
-          onTaskComplete?.(groupOps)
-          quill.deleteText(first.idx, deleteLen, Quill.sources.API)
-        })
+          const confirmed = await onTaskComplete?.(groupOps)
+          if (confirmed) {
+            quill.deleteText(first.idx, deleteLen, Quill.sources.API)
+          }
+        }
       })
     }
 
