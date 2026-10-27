@@ -566,11 +566,11 @@ body {
 }
 @keyframes fadeInUp { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-/* ── Task Panel ── */
+/* ── Task Panel（正式タスク一覧。旧 NOTES パネルの位置・幅を引き継ぐ） ── */
 .task-panel {
   position: fixed;
   top: env(safe-area-inset-top); right: 0; bottom: env(safe-area-inset-bottom);
-  width: 300px;
+  width: 320px;
   background: rgba(250,250,250,0.95);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border-left: 1px solid rgba(0,0,0,0.05);
