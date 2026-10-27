@@ -76,6 +76,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
   const onResourceClickRef = useRef(onResourceClick)
+  const savedRangeRef = useRef(null)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   useEffect(() => { onResourceClickRef.current = onResourceClick }, [onResourceClick])
 
@@ -99,6 +100,26 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
       if (range && quillRef.current) {
         quillRef.current.setSelection(range.index, range.length)
       }
+    },
+    // カーソル行の本文（タグを除く）と期限タグの表示文字列を返す。メモ本文は変更しない。
+    getCurrentLine() {
+      const q = quillRef.current
+      if (!q) return null
+      const range = q.getSelection() ?? savedRangeRef.current
+      if (!range) return null
+      const [line, offset] = q.getLine(range.index)
+      if (!line) return null
+      const start = range.index - offset
+      const ops = q.getContents(start, Math.max(0, line.length() - 1)).ops
+      let text = ''
+      let deadline = null
+      for (const op of ops) {
+        if (typeof op.insert !== 'string') continue
+        if (op.attributes?.tag === 'deadline') { deadline ??= op.insert; continue }
+        if (op.attributes?.tag) continue
+        text += op.insert
+      }
+      return { text: text.trim(), deadline }
     },
     insertLink(text, url, range) {
       const q = quillRef.current
@@ -188,6 +209,9 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         quill.insertText(tagStart, displayText, { tag: type }, Quill.sources.API)
       })
     }
+
+    // ツールバー操作でフォーカスが外れてもカーソル行を参照できるよう保持する
+    quill.on('selection-change', (range) => { if (range) savedRangeRef.current = range })
 
     // qmres: リンクのクリックをインターセプト
     quill.root.addEventListener('click', (e) => {

@@ -7,10 +7,25 @@ import Sidebar from './Sidebar'
 import ConfirmDialog from './ConfirmDialog'
 import ResourcePicker from './ResourcePicker'
 import TaskPanel from './TaskPanel'
+import TaskEditor from './TaskEditor'
+import LegacyTagImport from './LegacyTagImport'
+import { useTasks } from './useTasks'
 import './App.css'
 import { fmtDate } from './dateUtils'
 
 const LAST_NOTE_KEY = 'qm_last_note'
+
+// 「4月21日」形式の期限から次に来る日付を下書きとして作る（保存前に利用者が確認する）
+function guessDueDate(deadlineText) {
+  const m = deadlineText?.match(/(\d+)月(\d+)日/)
+  if (!m) return null
+  const now = new Date()
+  const month = parseInt(m[1]) - 1
+  const day = parseInt(m[2])
+  let year = now.getFullYear()
+  if (new Date(year, month, day, 23, 59, 59) < now) year++
+  return new Date(year, month, day, 23, 59, 59).getTime()
+}
 const SAVE_DELAY = 1500
 
 // Quill が生成する HTML に限定したサニタイザ
@@ -66,6 +81,10 @@ export default function App() {
     openResource, showInFolder, downloadResource,
     getResource,
   } = useResources()
+
+  const taskState = useTasks(user?.uid)
+  const [taskEditor, setTaskEditor]   = useState(null) // { mode, task, sourceNoteTitle }
+  const [legacyOpen, setLegacyOpen]   = useState(false)
 
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [sidebarOpen, setSidebarOpen]     = useState(false)
@@ -408,6 +427,47 @@ export default function App() {
     }
   }
 
+  const handleAddTask = () => setTaskEditor({ mode: 'create', task: null })
+  const handleEditTask = (task) => setTaskEditor({ mode: 'edit', task })
+
+  const handleSaveTask = (values) => {
+    const actions = taskState.actions
+    if (!actions || !taskEditor) return { ok: false, errors: ['ログイン後に利用できます'] }
+    const result = taskEditor.mode === 'edit'
+      ? actions.updateTask(taskEditor.task.id, values)
+      : actions.createTask({ ...values, sourceNoteId: taskEditor.task?.sourceNoteId ?? null })
+    if (result.ok) {
+      setTaskEditor(null)
+      showToast(taskEditor.mode === 'edit' ? 'タスクを更新しました' : 'タスクを追加しました')
+    }
+    return result
+  }
+
+  // メモのカーソル行からタスクを作る。メモ本文には何も書き込まない。
+  const handleMakeTask = () => {
+    const right = shortcutRef.current.focusedPane === 'right' && splitMode
+    const editor = (right ? editorRef2 : editorRef).current
+    const noteId = right ? secondNoteId : currentNoteId
+    const line = editor?.getCurrentLine()
+    if (!line?.text) { showToast('タスクにしたい行にカーソルを置いてください'); return }
+    const note = notes.find(n => n.id === noteId)
+    setTaskEditor({
+      mode: 'create',
+      task: { title: line.text.slice(0, 200), sourceNoteId: noteId, dueAt: guessDueDate(line.deadline) },
+      sourceNoteTitle: note?.title || '無題',
+    })
+  }
+
+  const handleLegacyImport = (drafts) => {
+    const failures = []
+    for (const draft of drafts) {
+      const result = taskState.actions?.createTask(draft)
+      if (!result?.ok) failures.push(`「${draft.title}」: ${result?.errors?.[0] ?? '登録できませんでした'}`)
+    }
+    if (drafts.length > failures.length) showToast(`${drafts.length - failures.length}件をタスクに登録しました`)
+    return failures
+  }
+
   if (authLoading) {
     return <div className="splash"><span className="splash-logo">QuickMemo</span></div>
   }
@@ -485,8 +545,13 @@ export default function App() {
       <TaskPanel
         open={taskPanelOpen}
         onClose={() => setTaskPanelOpen(false)}
+        taskState={taskState}
         notes={notes}
-        onNoteSelect={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
+        onAdd={handleAddTask}
+        onEdit={handleEditTask}
+        onOpenNote={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
+        onOpenLegacyImport={() => setLegacyOpen(true)}
+        onToast={showToast}
       />
 
       {/* History panel */}
@@ -621,6 +686,9 @@ export default function App() {
           <button className="tb-btn" onClick={() => applyFormat('list', 'unchecked')} aria-label="チェックボックス">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 20 6"/></svg>
           </button>
+          <button className="tb-btn" onClick={handleMakeTask} aria-label="この行をタスクにする" title="この行をタスクにする">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13" x2="12" y2="19"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
+          </button>
           <div className="tb-divider" />
           <button className="tb-btn tb-history" onClick={handleOpenHistory} aria-label="編集履歴">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -654,6 +722,23 @@ export default function App() {
         danger={confirm?.danger}
         onConfirm={() => { confirm?.onConfirm?.(); setConfirm(null) }}
         onCancel={() => setConfirm(null)}
+      />
+
+      <TaskEditor
+        open={!!taskEditor}
+        mode={taskEditor?.mode}
+        task={taskEditor?.task}
+        sourceNoteTitle={taskEditor?.sourceNoteTitle}
+        onSave={handleSaveTask}
+        onCancel={() => setTaskEditor(null)}
+      />
+
+      <LegacyTagImport
+        open={legacyOpen}
+        notes={notes}
+        tasks={taskState.tasks}
+        onImport={handleLegacyImport}
+        onClose={() => setLegacyOpen(false)}
       />
 
       {toastMsg && <div className="toast">{toastMsg}</div>}
