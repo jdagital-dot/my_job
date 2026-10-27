@@ -8,7 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_RUN_AS_NODE= electron .\"",
-    "electron:build": "cross-env ELECTRON_RUN_AS_NODE= vite build && cross-env ELECTRON_RUN_AS_NODE= electron-builder"
+    "electron:build": "cross-env ELECTRON_RUN_AS_NODE= vite build && cross-env ELECTRON_RUN_AS_NODE= electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-quickmemo \"vitest run --config vitest.rules.config.js\"",
+    "emulators": "firebase emulators:start --only firestore,auth --project demo-quickmemo",
+    "dev:emulator": "vite --mode emulator"
   },
   "build": {
     "appId": "com.antigravity.quickmemo",
@@ -32,12 +37,19 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^32.3.3",
     "electron-builder": "^26.8.1",
+    "firebase-tools": "^14.27.0",
+    "jsdom": "^25.0.1",
     "vite": "^5.4.19",
+    "vitest": "^2.1.9",
     "wait-on": "^9.0.4"
   }
 }
