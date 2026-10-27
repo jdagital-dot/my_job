@@ -3,3 +3,6 @@ dist
 .env
 .env.local
 release/
+
+# Firebase Emulator のログ
+*-debug.log

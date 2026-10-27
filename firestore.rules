@@ -7,5 +7,78 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.userId;
     }
+
+    // 正式タスク。制約値は src/tasks/taskModel.js と AI-Secretary の tasksync と一致させる。
+    match /users/{uid}/tasks/{taskId} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function optString(v, max) {
+        return v == null || (v is string && v.size() <= max);
+      }
+
+      function optTimestamp(v) {
+        return v == null || v is timestamp;
+      }
+
+      function validTask(d) {
+        return d.keys().hasOnly([
+            'id', 'title', 'description', 'domain', 'projectId', 'status', 'priority',
+            'dueAt', 'estimatedMinutes', 'assignee', 'nextAction', 'relatedSchedule',
+            'relatedMaterial', 'sensitivity', 'schoolNonConfidentialConfirmed', 'source',
+            'sourceNoteId', 'legacyFingerprint', 'createdAt', 'updatedAt', 'completedAt',
+            'updatedBy', 'revision'])
+          && d.keys().hasAll([
+            'id', 'title', 'description', 'domain', 'projectId', 'status', 'priority',
+            'dueAt', 'estimatedMinutes', 'assignee', 'nextAction', 'relatedSchedule',
+            'relatedMaterial', 'sensitivity', 'schoolNonConfidentialConfirmed', 'source',
+            'sourceNoteId', 'legacyFingerprint', 'createdAt', 'updatedAt', 'completedAt',
+            'updatedBy', 'revision'])
+          && d.id == taskId
+          && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
+          && d.description is string && d.description.size() <= 2000
+          && d.domain in ['school', 'table-tennis', 'business', 'personal']
+          && optString(d.projectId, 100)
+          && d.status in ['not_started', 'in_progress', 'waiting_review', 'completed', 'on_hold']
+          && d.priority is int && d.priority >= 1 && d.priority <= 5
+          && optTimestamp(d.dueAt)
+          && (d.estimatedMinutes == null
+              || (d.estimatedMinutes is int && d.estimatedMinutes >= 0 && d.estimatedMinutes <= 10080))
+          && d.assignee in ['self', 'ai', 'joint']
+          && d.nextAction is string && d.nextAction.size() <= 500
+          && d.relatedSchedule is string && d.relatedSchedule.size() <= 500
+          && d.relatedMaterial is string && d.relatedMaterial.size() <= 500
+          // confidential / restricted / uncertain は書き込ませない
+          && d.sensitivity in ['general', 'personal']
+          && d.schoolNonConfidentialConfirmed is bool
+          // 学校タスクは一般情報かつ非機密確認済みのものだけ
+          && (d.domain != 'school'
+              || (d.sensitivity == 'general' && d.schoolNonConfidentialConfirmed == true))
+          && d.source in ['quickmemo', 'ai_secretary']
+          && optString(d.sourceNoteId, 200)
+          && optString(d.legacyFingerprint, 200)
+          && (d.status == 'completed' ? d.completedAt is timestamp : d.completedAt == null)
+          && d.updatedBy in ['quickmemo', 'ai_secretary']
+          && d.revision is int
+          && d.updatedAt == request.time;
+      }
+
+      allow read: if isOwner();
+
+      allow create: if isOwner()
+        && validTask(request.resource.data)
+        && request.resource.data.revision == 1
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isOwner()
+        && validTask(request.resource.data)
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.source == resource.data.source;
+
+      // 初期段階では物理削除しない（完了・保留で非表示にする）
+      allow delete: if false;
+    }
   }
 }
