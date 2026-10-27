@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:rules": "firebase emulators:exec --only firestore --project demo-quickmemo \"vitest run --config vitest.rules.config.js\"",
     "emulators": "firebase emulators:start --only firestore,auth --project demo-quickmemo",
-    "dev:emulator": "vite --mode emulator"
+    "dev:emulator": "vite --mode emulator",
+    "test:e2e": "firebase emulators:exec --only firestore --project demo-quickmemo \"vitest run --config vitest.rules.config.js tests/integration\""
   },
   "build": {
     "appId": "com.antigravity.quickmemo",
