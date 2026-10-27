@@ -229,8 +229,9 @@ function fnv1a(str) {
   return h.toString(16).padStart(8, '0')
 }
 
-export function legacyFingerprint(noteId, taskText, deadlineText) {
-  return `legacy-v1:${noteId}:${fnv1a(`${taskText}\n${deadlineText}`)}`
+// メモIDを含めない: アーカイブ機能で行が別メモへ移動しても取り込み済みと判定できるようにする
+export function legacyFingerprint(taskText, deadlineText) {
+  return `legacy-v1:${fnv1a(`${taskText}\n${deadlineText}`)}`
 }
 
 // メモ本文（Quill Delta）から期限タグ付きの行を抽出する。年は確定しない。
@@ -261,7 +262,7 @@ export function extractLegacyDeadlineItems(notes) {
           day: m ? parseInt(m[2]) : null,
           checked: lineAttrs?.list === 'checked',
           fingerprint: (() => {
-            const base = legacyFingerprint(note.id, taskText, deadline)
+            const base = legacyFingerprint(taskText, deadline)
             const n = seen.get(base) ?? 0
             seen.set(base, n + 1)
             return n === 0 ? base : `${base}:${n}`

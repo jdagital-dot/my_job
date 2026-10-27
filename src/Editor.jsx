@@ -76,9 +76,12 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
   const onResourceClickRef = useRef(onResourceClick)
+  const onTaskCompleteRef = useRef(onTaskComplete)
   const savedRangeRef = useRef(null)
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   useEffect(() => { onResourceClickRef.current = onResourceClick }, [onResourceClick])
+  // 初期化時の関数を使い続けると最新のメモ一覧（アーカイブノートの有無）を参照できないため ref 経由で呼ぶ
+  useEffect(() => { onTaskCompleteRef.current = onTaskComplete }, [onTaskComplete])
 
   useImperativeHandle(ref, () => ({
     getHTML() {
@@ -247,7 +250,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
           const last = lineInfos[g.items[g.items.length - 1]]
           const deleteLen = last.idx + last.len - first.idx
           const groupOps = quill.getContents(first.idx, deleteLen).ops
-          const confirmed = await onTaskComplete?.(groupOps)
+          const confirmed = await onTaskCompleteRef.current?.(groupOps)
           if (confirmed) {
             quill.deleteText(first.idx, deleteLen, Quill.sources.API)
           }

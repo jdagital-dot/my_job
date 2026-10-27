@@ -128,7 +128,14 @@ describe('extractLegacyDeadlineItems', () => {
 
   it('指紋は内容から決定的に作られる', () => {
     const [a] = extractLegacyDeadlineItems([note])
-    expect(a.fingerprint).toBe(legacyFingerprint('n1', '牛乳を買う', '4月21日'))
+    expect(a.fingerprint).toBe(legacyFingerprint('牛乳を買う', '4月21日'))
+  })
+
+  it('アーカイブで別のメモへ移動した行も同じ指紋になる', () => {
+    const [original] = extractLegacyDeadlineItems([note])
+    const [moved] = extractLegacyDeadlineItems([{ ...note, id: 'archive', title: 'アーカイブ' }])
+    expect(moved.fingerprint).toBe(original.fingerprint)
+    expect(moved.noteId).toBe('archive')
   })
 
   it('削除済みメモや壊れた本文は無視する', () => {

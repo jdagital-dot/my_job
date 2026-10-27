@@ -173,7 +173,7 @@ describe('旧形式の期限タグ', () => {
     expect(created).toHaveLength(1)
     const task = repo.raw(UID, created[0].id)
     expect(task).toMatchObject({ title: '書類提出', sourceNoteId: 'n1', status: 'not_started' })
-    expect(task.legacyFingerprint).toMatch(/^legacy-v1:n1:/)
+    expect(task.legacyFingerprint).toMatch(/^legacy-v1:[0-9a-f]{8}$/)
     expect(new Date(task.dueAt).getFullYear()).toBe(year)
     // 元メモは変更しない
     expect(notes[0].content).toContain('4月21日')
