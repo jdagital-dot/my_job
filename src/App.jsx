@@ -450,11 +450,13 @@ export default function App() {
     const noteId = right ? secondNoteId : currentNoteId
     const line = editor?.getCurrentLine()
     if (!line?.text) { showToast('タスクにしたい行にカーソルを置いてください'); return }
-    const note = notes.find(n => n.id === noteId)
+    // 自動保存前の入力も題名に反映する
+    const content = (right ? pendingContentRef2 : pendingContentRef).current
+      ?? notes.find(n => n.id === noteId)?.content
     setTaskEditor({
       mode: 'create',
       task: { title: line.text.slice(0, 200), sourceNoteId: noteId, dueAt: guessDueDate(line.deadline) },
-      sourceNoteTitle: note?.title || '無題',
+      sourceNoteTitle: content ? extractTitle(content) : '無題',
     })
   }
 
