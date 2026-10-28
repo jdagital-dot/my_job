@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import { createFirestoreTaskRepository } from '../../src/tasks/taskRepository.js'
-import { buildTask } from '../../src/tasks/taskModel.js'
+import { buildTask, completionChanges } from '../../src/tasks/taskModel.js'
+import { createTaskStore } from '../../src/tasks/taskStore.js'
+import { buildPanelItems } from '../../src/tasks/panelItems.js'
 
 const SECRETARY_DIR = process.env.AI_SECRETARY_DIR
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080'
@@ -133,5 +135,28 @@ describe.skipIf(!enabled)('QuickMemo × AI-Secretary（Emulator 結合）', () =
     secretary('task', 'sync-resolve', task.id, '--prefer', 'local')
     expect((await qm.get(UID, task.id)).priority).toBe(1)
     expect(secretary('task', 'sync').conflict_count).toBe(0)
+  })
+
+  it('AI秘書で登録したメモに紐づかないタスクを QuickMemo の一覧に出し、完了チェックが次回同期で SQLite に反映される', async () => {
+    const created = secretary('task', 'add', '--title', 'AI秘書で登録したタスク', '--domain', 'business', '--due', '2026-11-20')
+    expect(secretary('task', 'sync').pushed_count).toBe(1)
+
+    // QuickMemo と同じ同期キュー（Firestore 実装）で受け取る
+    const store = createTaskStore({ repo: qm, uid: UID, storage: null })
+    store.start()
+    await expect.poll(() => store.getSnapshot().tasks.some(t => t.id === created.id)).toBe(true)
+    const { open } = buildPanelItems({ tasks: store.getSnapshot().tasks, notes: [] })
+    expect(open.find(i => i.id === created.id)).toMatchObject({ category: 'ai', noteId: null, domain: 'business' })
+
+    // 一覧の完了チェックと同じ更新
+    expect(store.updateTask(created.id, completionChanges(true)).ok).toBe(true)
+    await store.flush()
+    expect(store.getSnapshot().pending).toBe(0)
+    store.stop()
+
+    expect(secretary('task', 'sync').pulled_count).toBe(1)
+    const local = secretary('task', 'list', '--include-completed').find(t => t.id === created.id)
+    expect(local.status).toBe('completed')
+    expect(local.completed_at).toBeTruthy()
   })
 })
