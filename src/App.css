@@ -764,3 +764,15 @@ body {
   }
 }
 .task-editor-overlay { z-index: 400; }
+
+/* メモからの自動登録の設定 */
+.task-auto { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.task-auto-toggle {
+  display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  font-size: 0.72rem; color: #666; line-height: 1.4;
+}
+.task-auto-toggle input { width: 16px; height: 16px; flex-shrink: 0; }
+.task-auto select {
+  flex-shrink: 0; padding: 4px 6px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);
+  font-family: inherit; font-size: 0.72rem; background: #fff; color: #333;
+}

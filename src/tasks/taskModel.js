@@ -250,6 +250,8 @@ export function extractLegacyDeadlineItems(notes) {
     let text = ''
     let deadlines = []
     const flushLine = (lineAttrs) => {
+      // メモから自動登録済みの行（taskid 付き）は正式タスクがあるので対象外
+      if (lineAttrs?.taskid) { text = ''; deadlines = []; return }
       for (const deadline of deadlines) {
         const taskText = text.trim() || '（タスク名なし）'
         const m = deadline.match(/(\d+)月(\d+)日/)

@@ -10,6 +10,9 @@ import TaskPanel from './TaskPanel'
 import TaskEditor from './TaskEditor'
 import LegacyTagImport from './LegacyTagImport'
 import { useTasks } from './useTasks'
+import {
+  lineToTaskInput, lineChanges, loadAutoTaskSettings, saveAutoTaskSettings,
+} from './tasks/noteTaskSync'
 import './App.css'
 import { fmtDate } from './dateUtils'
 
@@ -83,6 +86,12 @@ export default function App() {
   } = useResources()
 
   const taskState = useTasks(user?.uid)
+  const tasksRef = useRef([])
+  tasksRef.current = taskState.tasks
+  const [autoTask, setAutoTaskState] = useState(() => loadAutoTaskSettings())
+  const autoTaskRef = useRef(autoTask)
+  autoTaskRef.current = autoTask
+  const setAutoTask = (next) => { setAutoTaskState(next); saveAutoTaskSettings(next) }
   const [taskEditor, setTaskEditor]   = useState(null) // { mode, task, sourceNoteTitle }
   const [legacyOpen, setLegacyOpen]   = useState(false)
 
@@ -472,11 +481,45 @@ export default function App() {
       ? actions.updateTask(taskEditor.task.id, values)
       : actions.createTask({ ...values, sourceNoteId: taskEditor.task?.sourceNoteId ?? null })
     if (result.ok) {
+      if (taskEditor.mode === 'create') taskEditor.assignTaskId?.(result.id)
       setTaskEditor(null)
       showToast(taskEditor.mode === 'edit' ? 'タスクを更新しました' : 'タスクを追加しました')
     }
     return result
   }
+
+  // 普段のメモのチェック行（期限タグ付き）から正式タスクを自動登録・更新する。
+  // エディタからは利用者が触った行だけが渡される。
+  const lastAutoTaskErrorRef = useRef(0)
+  const handleTaskLines = useCallback((noteId, entries) => {
+    const actions = taskState.actions
+    if (!actions) return
+    const settings = autoTaskRef.current
+    let created = 0
+    let failed = null
+    for (const entry of entries) {
+      const { line } = entry
+      if (!line.qualifies) continue
+      if (line.taskId) {
+        const task = tasksRef.current.find(t => t.id === line.taskId)
+        if (!task) continue // 他の端末で作成され、まだ届いていない
+        const changes = lineChanges(line, task, entry)
+        if (Object.keys(changes).length === 0) continue
+        const result = actions.updateTask(task.id, changes)
+        if (!result.ok) failed = result.errors[0]
+      } else if (settings.enabled) {
+        const result = actions.createTask(lineToTaskInput(line, { noteId, domain: settings.domain }))
+        if (result.ok) { entry.assignTaskId(result.id); created++ }
+        else failed = result.errors[0]
+      }
+    }
+    if (created) showToast(created === 1 ? 'メモの行をタスクに登録しました' : `メモの${created}行をタスクに登録しました`)
+    // 同じ理由のエラーを入力のたびに出し続けない
+    if (failed && Date.now() - lastAutoTaskErrorRef.current > 10_000) {
+      lastAutoTaskErrorRef.current = Date.now()
+      showToast(`タスクに登録できませんでした: ${failed}`)
+    }
+  }, [taskState.actions, showToast])
 
   // メモのカーソル行からタスクを作る。メモ本文には何も書き込まない。
   const handleMakeTask = () => {
@@ -485,6 +528,9 @@ export default function App() {
     const noteId = right ? secondNoteId : currentNoteId
     const line = editor?.getCurrentLine()
     if (!line?.text) { showToast('タスクにしたい行にカーソルを置いてください'); return }
+    if (line.taskId && taskState.tasks.some(t => t.id === line.taskId)) {
+      showToast('この行はすでにタスクに登録されています'); return
+    }
     // 自動保存前の入力も題名に反映する
     const content = (right ? pendingContentRef2 : pendingContentRef).current
       ?? notes.find(n => n.id === noteId)?.content
@@ -492,6 +538,7 @@ export default function App() {
       mode: 'create',
       task: { title: line.text.slice(0, 200), sourceNoteId: noteId, dueAt: guessDueDate(line.deadline) },
       sourceNoteTitle: content ? extractTitle(content) : '無題',
+      assignTaskId: line.assignTaskId,
     })
   }
 
@@ -589,6 +636,8 @@ export default function App() {
         onOpenNote={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
         onOpenLegacyImport={() => setLegacyOpen(true)}
         onToast={showToast}
+        autoTask={autoTask}
+        onAutoTaskChange={setAutoTask}
       />
 
       {/* History panel */}
@@ -670,7 +719,8 @@ export default function App() {
                     noteId={currentNoteId} content={currentNote.content}
                     onChange={handleContentChange}
                     onResourceClick={handleResourceClick}
-                    onTaskComplete={handleTaskComplete} />
+                    onTaskComplete={handleTaskComplete}
+                    onTaskLines={handleTaskLines} />
                 </div>
                 {preview && (
                   <div className="preview-area ql-editor"
@@ -704,7 +754,8 @@ export default function App() {
                 <Editor ref={editorRef2} key={editorKey2}
                   noteId={secondNoteId} content={secondNote.content}
                   onChange={handleContentChange2}
-                  onResourceClick={handleResourceClick} />
+                  onResourceClick={handleResourceClick}
+                  onTaskLines={handleTaskLines} />
               ) : (
                 <div className="loading">メモを選択してください</div>
               )}

@@ -69,6 +69,7 @@ function TaskItem({ task, now, noteExists, onToggle, onEdit, onOpenNote, onResol
 export default function TaskPanel({
   open, onClose, taskState, notes, now = Date.now(),
   onAdd, onEdit, onOpenNote, onOpenLegacyImport, onToast,
+  autoTask, onAutoTaskChange,
 }) {
   const [view, setView] = useState('today')
   const [domain, setDomain] = useState('')
@@ -144,6 +145,20 @@ export default function TaskPanel({
       </div>
 
       <div className="task-panel-footer">
+        {autoTask && (
+          <div className="task-auto">
+            <label className="task-auto-toggle">
+              <input type="checkbox" checked={autoTask.enabled}
+                onChange={e => onAutoTaskChange({ ...autoTask, enabled: e.target.checked })} />
+              <span>メモのチェック行（期限付き）を自動でタスクに</span>
+            </label>
+            <select value={autoTask.domain} disabled={!autoTask.enabled}
+              onChange={e => onAutoTaskChange({ ...autoTask, domain: e.target.value })}
+              aria-label="自動登録する分野">
+              {Object.entries(DOMAINS).filter(([v]) => v !== 'school').map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        )}
         <button type="button" className="task-link" onClick={onOpenLegacyImport}>旧形式の期限タグを確認</button>
       </div>
     </div>

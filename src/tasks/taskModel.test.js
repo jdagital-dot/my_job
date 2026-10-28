@@ -138,6 +138,17 @@ describe('extractLegacyDeadlineItems', () => {
     expect(moved.noteId).toBe('archive')
   })
 
+  it('自動登録済み（taskid 付き）の行は対象外', () => {
+    const linked = {
+      id: 'n2', title: 'x',
+      content: JSON.stringify({ ops: [
+        { insert: '登録済み' }, { insert: '4月21日', attributes: { tag: 'deadline' } },
+        { insert: '\n', attributes: { list: 'unchecked', taskid: 't1' } },
+      ] }),
+    }
+    expect(extractLegacyDeadlineItems([linked])).toEqual([])
+  })
+
   it('削除済みメモや壊れた本文は無視する', () => {
     expect(extractLegacyDeadlineItems([{ ...note, deleted: true }, { id: 'x', content: '{' }])).toEqual([])
   })

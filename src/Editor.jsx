@@ -1,6 +1,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
+import { parseTaskLine, duplicateTaskIdLines } from './tasks/noteTaskSync'
 
 const Inline = Quill.import('blots/inline')
 
@@ -28,6 +29,13 @@ class TagBlot extends Inline {
 }
 
 Quill.register(TagBlot)
+
+// 行とタスクの対応。改行に付く行属性として保存し、本文には何も書き込まない。
+const Parchment = Quill.import('parchment')
+const TaskIdAttribute = new Parchment.Attributor('taskid', 'data-task-id', { scope: Parchment.Scope.BLOCK })
+Quill.register(TaskIdAttribute)
+
+const TASK_LINE_DELAY = 1500
 
 function formatTagDisplay(tagText, type) {
   if (type === 'time') {
@@ -71,13 +79,20 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick, onTaskComplete }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick, onTaskComplete, onTaskLines }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
   const onResourceClickRef = useRef(onResourceClick)
   const onTaskCompleteRef = useRef(onTaskComplete)
   const savedRangeRef = useRef(null)
+  const onTaskLinesRef = useRef(onTaskLines)
+  const noteIdRef = useRef(noteId)
+  const touchedLinesRef = useRef(new Map()) // 行 blot -> { textChanged, checkToggled }
+  const taskLineTimerRef = useRef(null)
+  const flushTaskLinesRef = useRef(() => {})
+  useEffect(() => { onTaskLinesRef.current = onTaskLines }, [onTaskLines])
+  useEffect(() => { noteIdRef.current = noteId }, [noteId])
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   useEffect(() => { onResourceClickRef.current = onResourceClick }, [onResourceClick])
   // 初期化時の関数を使い続けると最新のメモ一覧（アーカイブノートの有無）を参照できないため ref 経由で呼ぶ
@@ -122,7 +137,12 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
         if (op.attributes?.tag) continue
         text += op.insert
       }
-      return { text: text.trim(), deadline }
+      // 手動でタスク化したとき、自動登録と二重にならないよう行に taskid を付ける
+      const assignTaskId = (id) => {
+        if (!line.scroll || !line.domNode.isConnected) return
+        q.formatLine(q.getIndex(line), 1, { taskid: id }, Quill.sources.API)
+      }
+      return { text: text.trim(), deadline, taskId: line.formats().taskid ?? null, assignTaskId }
     },
     insertLink(text, url, range) {
       const q = quillRef.current
@@ -252,6 +272,7 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
           const groupOps = quill.getContents(first.idx, deleteLen).ops
           const confirmed = await onTaskCompleteRef.current?.(groupOps)
           if (confirmed) {
+            flushTaskLinesRef.current() // 移動する行の変更を先にタスクへ反映する
             quill.deleteText(first.idx, deleteLen, Quill.sources.API)
           }
         }
@@ -260,6 +281,76 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
 
     // ツールバー操作でフォーカスが外れてもカーソル行を参照できるよう保持する
     quill.on('selection-change', (range) => { if (range) savedRangeRef.current = range })
+
+    // ── メモの行から正式タスクを自動登録・更新 ──
+    // 利用者が触った行だけを記録し、入力が止まったらまとめて App に渡す
+    const markLines = (index, length, flag) => {
+      for (const line of quill.getLines(index, Math.max(1, length))) {
+        const current = touchedLinesRef.current.get(line) ?? { textChanged: false, checkToggled: false }
+        current[flag] = true
+        touchedLinesRef.current.set(line, current)
+      }
+    }
+
+    const dedupeTaskIds = () => {
+      if (!quill.root.querySelector('[data-task-id]')) return
+      const lines = quill.getLines(0, quill.getLength())
+      const infos = lines.map(line => ({ taskId: line.formats().taskid ?? null, hasText: line.length() > 1 }))
+      for (const i of duplicateTaskIdLines(infos)) {
+        quill.formatLine(quill.getIndex(lines[i]), 1, { taskid: false }, Quill.sources.API)
+      }
+    }
+
+    const flushTaskLines = () => {
+      clearTimeout(taskLineTimerRef.current)
+      const touched = touchedLinesRef.current
+      touchedLinesRef.current = new Map()
+      if (!onTaskLinesRef.current || touched.size === 0) return
+      const entries = []
+      for (const [line, flags] of touched) {
+        if (!line.scroll || !line.domNode.isConnected) continue
+        const index = quill.getIndex(line)
+        const ops = quill.getContents(index, Math.max(0, line.length() - 1)).ops
+        entries.push({
+          line: parseTaskLine(ops, line.formats()),
+          ...flags,
+          assignTaskId: (id) => {
+            if (!line.scroll || !line.domNode.isConnected) return
+            quill.formatLine(quill.getIndex(line), 1, { taskid: id }, Quill.sources.API)
+          },
+        })
+      }
+      if (entries.length) onTaskLinesRef.current(noteIdRef.current, entries)
+    }
+    flushTaskLinesRef.current = flushTaskLines
+
+    if (!readOnly) {
+      quill.on('text-change', (delta, _old, source) => {
+        if (source !== Quill.sources.USER) return
+        let index = 0
+        let checkToggled = false
+        for (const op of delta.ops) {
+          if (typeof op.retain === 'number') {
+            if (op.attributes && 'list' in op.attributes) {
+              markLines(index, op.retain, 'checkToggled')
+              checkToggled = true
+            }
+            index += op.retain
+          } else if (op.insert != null) {
+            const length = typeof op.insert === 'string' ? op.insert.length : 1
+            markLines(index, length, 'textChanged')
+            index += length
+          } else if (op.delete) {
+            markLines(index, 0, 'textChanged')
+          }
+        }
+        dedupeTaskIds()
+        clearTimeout(taskLineTimerRef.current)
+        // チェックの付け外しはすぐ反映する（アーカイブで行が移動する前に完了にするため）
+        if (checkToggled) flushTaskLines()
+        else taskLineTimerRef.current = setTimeout(flushTaskLines, TASK_LINE_DELAY)
+      })
+    }
 
     // qmres: リンクのクリックをインターセプト
     quill.root.addEventListener('click', (e) => {
@@ -273,6 +364,8 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
     quillRef.current = quill
 
     return () => {
+      // メモを切り替える前に、入力途中の行も登録・更新する
+      flushTaskLinesRef.current()
       quill.disable()
       quillRef.current = null
     }
