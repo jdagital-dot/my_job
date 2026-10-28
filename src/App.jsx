@@ -586,7 +586,10 @@ export default function App() {
         open={noteListPanelOpen}
         onClose={() => setNoteListPanelOpen(false)}
         notes={notes}
+        taskState={taskState}
         onNoteSelect={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
+        onOpenSyncIssues={() => setSyncIssueOpen(true)}
+        onToast={showToast}
       />
 
       {/* History panel */}
