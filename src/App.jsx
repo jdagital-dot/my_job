@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { useAuth } from './useAuth'
 import { useNotes } from './useNotes'
 import { useResources } from './useResources'
@@ -6,29 +7,17 @@ import Editor from './Editor'
 import Sidebar from './Sidebar'
 import ConfirmDialog from './ConfirmDialog'
 import ResourcePicker from './ResourcePicker'
-import TaskPanel from './TaskPanel'
-import TaskEditor from './TaskEditor'
-import LegacyTagImport from './LegacyTagImport'
+import NoteListPanel from './NoteListPanel'
+import TaskEntryBar from './TaskEntryBar'
+import SyncIssueDialog from './SyncIssueDialog'
 import { useTasks } from './useTasks'
 import {
-  lineToTaskInput, lineChanges, loadAutoTaskSettings, saveAutoTaskSettings,
+  entryToTaskInput, lineChanges, loadLastDomain, saveLastDomain,
 } from './tasks/noteTaskSync'
 import './App.css'
 import { fmtDate } from './dateUtils'
 
 const LAST_NOTE_KEY = 'qm_last_note'
-
-// 「4月21日」形式の期限から次に来る日付を下書きとして作る（保存前に利用者が確認する）
-function guessDueDate(deadlineText) {
-  const m = deadlineText?.match(/(\d+)月(\d+)日/)
-  if (!m) return null
-  const now = new Date()
-  const month = parseInt(m[1]) - 1
-  const day = parseInt(m[2])
-  let year = now.getFullYear()
-  if (new Date(year, month, day, 23, 59, 59) < now) year++
-  return new Date(year, month, day, 23, 59, 59).getTime()
-}
 const SAVE_DELAY = 1500
 
 // Quill が生成する HTML に限定したサニタイザ
@@ -88,12 +77,9 @@ export default function App() {
   const taskState = useTasks(user?.uid)
   const tasksRef = useRef([])
   tasksRef.current = taskState.tasks
-  const [autoTask, setAutoTaskState] = useState(() => loadAutoTaskSettings())
-  const autoTaskRef = useRef(autoTask)
-  autoTaskRef.current = autoTask
-  const setAutoTask = (next) => { setAutoTaskState(next); saveAutoTaskSettings(next) }
-  const [taskEditor, setTaskEditor]   = useState(null) // { mode, task, sourceNoteTitle }
-  const [legacyOpen, setLegacyOpen]   = useState(false)
+  const [taskEntry, setTaskEntry] = useState(null) // メモの行から入力中のタスク
+  const taskEntryBarRef = useRef(null)
+  const [syncIssueOpen, setSyncIssueOpen] = useState(false)
 
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [sidebarOpen, setSidebarOpen]     = useState(false)
@@ -102,7 +88,7 @@ export default function App() {
   const [preview, setPreview]             = useState(false)
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
   const [historyEntries, setHistoryEntries]     = useState([])
-  const [taskPanelOpen, setTaskPanelOpen] = useState(false)
+  const [noteListPanelOpen, setNoteListPanelOpen] = useState(false)
   const [editorKey, setEditorKey]   = useState(0)
   const [splitMode, setSplitMode]   = useState(false)
   const [secondNoteId, setSecondNoteId] = useState(null)
@@ -471,86 +457,56 @@ export default function App() {
     }
   }
 
-  const handleAddTask = () => setTaskEditor({ mode: 'create', task: null })
-  const handleEditTask = (task) => setTaskEditor({ mode: 'edit', task })
+  // メモのチェック行で Enter → 画面下の入力欄で期限・時間・タグを入れてタスクにする。
+  // iPhone でキーボードを閉じないよう、表示とフォーカス移動を Enter の処理内で行う。
+  const handleTaskEnter = useCallback((entry) => {
+    if (!taskState.actions) return
+    flushSync(() => setTaskEntry({ ...entry, key: Date.now() }))
+    taskEntryBarRef.current?.focus()
+  }, [taskState.actions])
 
-  const handleSaveTask = (values) => {
-    const actions = taskState.actions
-    if (!actions || !taskEditor) return { ok: false, errors: ['ログイン後に利用できます'] }
-    const result = taskEditor.mode === 'edit'
-      ? actions.updateTask(taskEditor.task.id, values)
-      : actions.createTask({ ...values, sourceNoteId: taskEditor.task?.sourceNoteId ?? null })
-    if (result.ok) {
-      if (taskEditor.mode === 'create') taskEditor.assignTaskId?.(result.id)
-      setTaskEditor(null)
-      showToast(taskEditor.mode === 'edit' ? 'タスクを更新しました' : 'タスクを追加しました')
-    }
+  const closeTaskEntry = (refocus) => {
+    const entry = taskEntry
+    flushSync(() => setTaskEntry(null))
+    if (refocus) entry?.focusAfter()
+  }
+
+  const handleTaskEntryFinish = ({ deadline, minutes, domain }) => {
+    const entry = taskEntry
+    if (!entry || !taskState.actions) return { ok: false, errors: ['ログイン後に利用できます'] }
+    const result = taskState.actions.createTask(entryToTaskInput({ ...entry, deadline, minutes, domain }))
+    if (!result.ok) return result
+    entry.apply({ deadline, minutes, domain, taskId: result.id })
+    saveLastDomain(domain)
+    closeTaskEntry(true)
     return result
   }
 
-  // 普段のメモのチェック行（期限タグ付き）から正式タスクを自動登録・更新する。
+  // タスクにした行をあとで編集・チェックしたら、その変更をタスクへ反映する。
   // エディタからは利用者が触った行だけが渡される。
-  const lastAutoTaskErrorRef = useRef(0)
+  const lastTaskLineErrorRef = useRef(0)
   const handleTaskLines = useCallback((noteId, entries) => {
     const actions = taskState.actions
     if (!actions) return
-    const settings = autoTaskRef.current
-    let created = 0
     let failed = null
     for (const entry of entries) {
       const { line } = entry
-      if (!line.qualifies) continue
-      if (line.taskId) {
-        const task = tasksRef.current.find(t => t.id === line.taskId)
-        if (!task) continue // 他の端末で作成され、まだ届いていない
-        const changes = lineChanges(line, task, entry)
-        if (Object.keys(changes).length === 0) continue
-        const result = actions.updateTask(task.id, changes)
-        if (!result.ok) failed = result.errors[0]
-      } else if (settings.enabled) {
-        const result = actions.createTask(lineToTaskInput(line, { noteId, domain: settings.domain }))
-        if (result.ok) { entry.assignTaskId(result.id); created++ }
-        else failed = result.errors[0]
-      }
+      if (!line.taskId || !line.isChecklist) continue
+      const task = tasksRef.current.find(t => t.id === line.taskId)
+      if (!task) continue // 他の端末で作成され、まだ届いていない
+      const changes = lineChanges(line, task, entry)
+      if (Object.keys(changes).length === 0) continue
+      const result = actions.updateTask(task.id, changes)
+      if (!result.ok) failed = result.errors[0]
     }
-    if (created) showToast(created === 1 ? 'メモの行をタスクに登録しました' : `メモの${created}行をタスクに登録しました`)
     // 同じ理由のエラーを入力のたびに出し続けない
-    if (failed && Date.now() - lastAutoTaskErrorRef.current > 10_000) {
-      lastAutoTaskErrorRef.current = Date.now()
-      showToast(`タスクに登録できませんでした: ${failed}`)
+    if (failed && Date.now() - lastTaskLineErrorRef.current > 10_000) {
+      lastTaskLineErrorRef.current = Date.now()
+      showToast(`タスクに反映できませんでした: ${failed}`)
     }
   }, [taskState.actions, showToast])
 
-  // メモのカーソル行からタスクを作る。メモ本文には何も書き込まない。
-  const handleMakeTask = () => {
-    const right = shortcutRef.current.focusedPane === 'right' && splitMode
-    const editor = (right ? editorRef2 : editorRef).current
-    const noteId = right ? secondNoteId : currentNoteId
-    const line = editor?.getCurrentLine()
-    if (!line?.text) { showToast('タスクにしたい行にカーソルを置いてください'); return }
-    if (line.taskId && taskState.tasks.some(t => t.id === line.taskId)) {
-      showToast('この行はすでにタスクに登録されています'); return
-    }
-    // 自動保存前の入力も題名に反映する
-    const content = (right ? pendingContentRef2 : pendingContentRef).current
-      ?? notes.find(n => n.id === noteId)?.content
-    setTaskEditor({
-      mode: 'create',
-      task: { title: line.text.slice(0, 200), sourceNoteId: noteId, dueAt: guessDueDate(line.deadline) },
-      sourceNoteTitle: content ? extractTitle(content) : '無題',
-      assignTaskId: line.assignTaskId,
-    })
-  }
-
-  const handleLegacyImport = (drafts) => {
-    const failures = []
-    for (const draft of drafts) {
-      const result = taskState.actions?.createTask(draft)
-      if (!result?.ok) failures.push(`「${draft.title}」: ${result?.errors?.[0] ?? '登録できませんでした'}`)
-    }
-    if (drafts.length > failures.length) showToast(`${drafts.length - failures.length}件をタスクに登録しました`)
-    return failures
-  }
+  const syncIssueCount = taskState.conflicts.length + taskState.rejected.length
 
   if (authLoading) {
     return <div className="splash"><span className="splash-logo">QuickMemo</span></div>
@@ -594,7 +550,7 @@ export default function App() {
     >
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
       {historyPanelOpen && <div className="overlay" onClick={() => setHistoryPanelOpen(false)} />}
-      {taskPanelOpen && <div className="overlay" onClick={() => setTaskPanelOpen(false)} />}
+      {noteListPanelOpen && <div className="overlay" onClick={() => setNoteListPanelOpen(false)} />}
 
       <Sidebar
         open={sidebarOpen}
@@ -626,18 +582,11 @@ export default function App() {
         onDownloadResource={downloadResource}
       />
 
-      <TaskPanel
-        open={taskPanelOpen}
-        onClose={() => setTaskPanelOpen(false)}
-        taskState={taskState}
+      <NoteListPanel
+        open={noteListPanelOpen}
+        onClose={() => setNoteListPanelOpen(false)}
         notes={notes}
-        onAdd={handleAddTask}
-        onEdit={handleEditTask}
-        onOpenNote={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
-        onOpenLegacyImport={() => setLegacyOpen(true)}
-        onToast={showToast}
-        autoTask={autoTask}
-        onAutoTaskChange={setAutoTask}
+        onNoteSelect={(id) => { handleSelectNote(id); setSidebarOpen(false) }}
       />
 
       {/* History panel */}
@@ -684,10 +633,15 @@ export default function App() {
           </button>
           <span className="app-name">QuickMemo</span>
           <div className="save-status">
+            {syncIssueCount > 0 && (
+              <button type="button" className="sync-issue-btn" onClick={() => setSyncIssueOpen(true)}>
+                同期の確認（{syncIssueCount}）
+              </button>
+            )}
             {saveStatus === 'saving' && <span className="status-saving">● 保存中</span>}
             {saveStatus === 'saved'  && <span className="status-saved">● 保存済</span>}
           </div>
-          <button className="icon-btn" onClick={() => setTaskPanelOpen(true)} aria-label="タスク一覧">
+          <button className="icon-btn" onClick={() => setNoteListPanelOpen(true)} aria-label="ノート一覧">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
               <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
@@ -720,7 +674,9 @@ export default function App() {
                     onChange={handleContentChange}
                     onResourceClick={handleResourceClick}
                     onTaskComplete={handleTaskComplete}
-                    onTaskLines={handleTaskLines} />
+                    onTaskLines={handleTaskLines}
+                    onTaskEnter={handleTaskEnter}
+                    onUserFocus={() => taskEntry && closeTaskEntry(false)} />
                 </div>
                 {preview && (
                   <div className="preview-area ql-editor"
@@ -755,7 +711,9 @@ export default function App() {
                   noteId={secondNoteId} content={secondNote.content}
                   onChange={handleContentChange2}
                   onResourceClick={handleResourceClick}
-                  onTaskLines={handleTaskLines} />
+                  onTaskLines={handleTaskLines}
+                  onTaskEnter={handleTaskEnter}
+                  onUserFocus={() => taskEntry && closeTaskEntry(false)} />
               ) : (
                 <div className="loading">メモを選択してください</div>
               )}
@@ -763,8 +721,14 @@ export default function App() {
           )}
         </div>
 
+        {taskEntry && (
+          <TaskEntryBar key={taskEntry.key} ref={taskEntryBarRef} entry={taskEntry}
+            defaultDomain={loadLastDomain()}
+            onFinish={handleTaskEntryFinish}
+            onCancel={() => closeTaskEntry(true)} />
+        )}
         {/* Bottom toolbar — programmatic (works for focused pane) */}
-        <div id="qm-toolbar" className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
+        <div id="qm-toolbar" style={taskEntry ? { display: 'none' } : undefined} className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
           <button className="tb-btn" onClick={() => applyFormat('bold', true)} aria-label="太字"><b>B</b></button>
           <button className="tb-btn" onClick={() => applyFormat('header', 1)} aria-label="見出し">H1</button>
           <button className="tb-btn" onClick={() => applyFormat('list', 'bullet')} aria-label="箇条書き">
@@ -775,9 +739,6 @@ export default function App() {
           </button>
           <button className="tb-btn" onClick={() => applyFormat('list', 'unchecked')} aria-label="チェックボックス">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 20 6"/></svg>
-          </button>
-          <button className="tb-btn" onClick={handleMakeTask} aria-label="この行をタスクにする" title="この行をタスクにする">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="13" x2="12" y2="19"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
           </button>
           <div className="tb-divider" />
           <button className="tb-btn tb-history" onClick={handleOpenHistory} aria-label="編集履歴">
@@ -814,21 +775,10 @@ export default function App() {
         onCancel={() => { confirm?.onCancel?.(); setConfirm(null) }}
       />
 
-      <TaskEditor
-        open={!!taskEditor}
-        mode={taskEditor?.mode}
-        task={taskEditor?.task}
-        sourceNoteTitle={taskEditor?.sourceNoteTitle}
-        onSave={handleSaveTask}
-        onCancel={() => setTaskEditor(null)}
-      />
-
-      <LegacyTagImport
-        open={legacyOpen}
-        notes={notes}
-        tasks={taskState.tasks}
-        onImport={handleLegacyImport}
-        onClose={() => setLegacyOpen(false)}
+      <SyncIssueDialog
+        open={syncIssueOpen}
+        taskState={taskState}
+        onClose={() => setSyncIssueOpen(false)}
       />
 
       {toastMsg && <div className="toast">{toastMsg}</div>}

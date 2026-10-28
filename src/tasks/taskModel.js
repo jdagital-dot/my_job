@@ -17,8 +17,6 @@ export const STATUSES = {
   on_hold: '保留',
 }
 
-export const ASSIGNEES = { self: '自分', ai: 'AI', joint: '共同' }
-
 export const LIMITS = {
   title: 200,
   description: 2000,
@@ -51,41 +49,6 @@ export function newId() {
 
 export function sensitivityFor(domain) {
   return domain === 'personal' ? 'personal' : 'general'
-}
-
-// 期限: 日付のみの場合はその日の 23:59:59（ローカル時刻）として保存する
-export function toDueAt(dateStr, timeStr) {
-  if (!dateStr) return null
-  const [y, m, d] = dateStr.split('-').map(Number)
-  if (!y || !m || !d) return null
-  if (timeStr) {
-    const [hh, mm] = timeStr.split(':').map(Number)
-    return new Date(y, m - 1, d, hh, mm, 0, 0).getTime()
-  }
-  return new Date(y, m - 1, d, 23, 59, 59, 0).getTime()
-}
-
-export function isDateOnly(ms) {
-  if (ms == null) return false
-  const d = new Date(ms)
-  return d.getHours() === 23 && d.getMinutes() === 59 && d.getSeconds() === 59
-}
-
-function pad(n) { return String(n).padStart(2, '0') }
-
-export function splitDueAt(ms) {
-  if (ms == null) return { date: '', time: '' }
-  const d = new Date(ms)
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  return { date, time: isDateOnly(ms) ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}` }
-}
-
-export function formatDue(ms, now = Date.now()) {
-  if (ms == null) return ''
-  const d = new Date(ms)
-  const sameYear = d.getFullYear() === new Date(now).getFullYear()
-  const date = sameYear ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
-  return isDateOnly(ms) ? date : `${date} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 // 保存前の内容確認。問題がなければ null、あれば利用者向けメッセージを返す。
@@ -178,114 +141,4 @@ export function normalizeChanges(changes, now = Date.now()) {
   }
   if ('title' in next) next.title = next.title.trim()
   return next
-}
-
-// ── 表示切替 ───────────────────────────────
-
-function endOfToday(now) {
-  const d = new Date(now)
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime()
-}
-
-export const VIEWS = {
-  today: '今日',
-  soon: '期限間近',
-  all: 'すべて',
-  completed: '完了済み',
-}
-
-export const DUE_SOON_DAYS = 3
-
-export function filterTasks(tasks, { view = 'all', domain = '', status = '' } = {}, now = Date.now()) {
-  const todayEnd = endOfToday(now)
-  const soonEnd = todayEnd + DUE_SOON_DAYS * 24 * 60 * 60 * 1000
-  return tasks
-    .filter(t => {
-      if (view === 'completed') { if (t.status !== 'completed') return false }
-      else if (t.status === 'completed') return false
-      if (view === 'today' && !(t.dueAt != null && t.dueAt <= todayEnd)) return false
-      if (view === 'soon' && !(t.dueAt != null && t.dueAt <= soonEnd)) return false
-      if (domain && t.domain !== domain) return false
-      if (status && t.status !== status) return false
-      return true
-    })
-    .sort((a, b) => {
-      if (view === 'completed') return (b.completedAt ?? 0) - (a.completedAt ?? 0)
-      const da = a.dueAt ?? Infinity
-      const dbb = b.dueAt ?? Infinity
-      if (da !== dbb) return da - dbb
-      return a.priority - b.priority
-    })
-}
-
-// ── 旧形式の期限タグ（/MMDD）───────────────────
-
-function fnv1a(str) {
-  let h = 0x811c9dc5
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i)
-    h = Math.imul(h, 0x01000193) >>> 0
-  }
-  return h.toString(16).padStart(8, '0')
-}
-
-// メモIDを含めない: アーカイブ機能で行が別メモへ移動しても取り込み済みと判定できるようにする
-export function legacyFingerprint(taskText, deadlineText) {
-  return `legacy-v1:${fnv1a(`${taskText}\n${deadlineText}`)}`
-}
-
-// メモ本文（Quill Delta）から期限タグ付きの行を抽出する。年は確定しない。
-export function extractLegacyDeadlineItems(notes) {
-  const items = []
-  const seen = new Map()
-  for (const note of notes) {
-    if (!note.content || note.deleted) continue
-    let ops
-    try {
-      const parsed = JSON.parse(note.content)
-      ops = parsed.ops ?? parsed
-    } catch { continue }
-    if (!Array.isArray(ops)) continue
-
-    let text = ''
-    let deadlines = []
-    const flushLine = (lineAttrs) => {
-      // メモから自動登録済みの行（taskid 付き）は正式タスクがあるので対象外
-      if (lineAttrs?.taskid) { text = ''; deadlines = []; return }
-      for (const deadline of deadlines) {
-        const taskText = text.trim() || '（タスク名なし）'
-        const m = deadline.match(/(\d+)月(\d+)日/)
-        items.push({
-          noteId: note.id,
-          noteTitle: note.title || '無題',
-          taskText,
-          deadlineText: deadline,
-          month: m ? parseInt(m[1]) : null,
-          day: m ? parseInt(m[2]) : null,
-          checked: lineAttrs?.list === 'checked',
-          fingerprint: (() => {
-            const base = legacyFingerprint(taskText, deadline)
-            const n = seen.get(base) ?? 0
-            seen.set(base, n + 1)
-            return n === 0 ? base : `${base}:${n}`
-          })(),
-        })
-      }
-      text = ''
-      deadlines = []
-    }
-
-    for (const op of ops) {
-      if (typeof op.insert !== 'string') continue
-      if (op.attributes?.tag === 'deadline') { deadlines.push(op.insert); continue }
-      if (op.attributes?.tag) continue
-      const parts = op.insert.split('\n')
-      for (let i = 0; i < parts.length; i++) {
-        text += parts[i]
-        if (i < parts.length - 1) flushLine(op.attributes)
-      }
-    }
-    if (deadlines.length) flushLine(null)
-  }
-  return items
 }

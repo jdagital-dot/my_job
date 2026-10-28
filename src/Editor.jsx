@@ -1,7 +1,9 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
-import { parseTaskLine, duplicateTaskIdLines } from './tasks/noteTaskSync'
+import {
+  parseTaskLine, duplicateTaskIdLines, formatDeadlineTag, formatDurationTag, DOMAIN_TAGS,
+} from './tasks/noteTaskSync'
 
 const Inline = Quill.import('blots/inline')
 
@@ -79,14 +81,17 @@ function migrateLegacyCheckbox(ops) {
   return result
 }
 
-const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick, onTaskComplete, onTaskLines }, ref) {
+const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly = false, onResourceClick, onTaskComplete, onTaskLines, onTaskEnter, onUserFocus }, ref) {
   const containerRef = useRef(null)
   const quillRef = useRef(null)
   const onChangeRef = useRef(onChange)
   const onResourceClickRef = useRef(onResourceClick)
   const onTaskCompleteRef = useRef(onTaskComplete)
-  const savedRangeRef = useRef(null)
   const onTaskLinesRef = useRef(onTaskLines)
+  const onTaskEnterRef = useRef(onTaskEnter)
+  const onUserFocusRef = useRef(onUserFocus)
+  useEffect(() => { onTaskEnterRef.current = onTaskEnter }, [onTaskEnter])
+  useEffect(() => { onUserFocusRef.current = onUserFocus }, [onUserFocus])
   const noteIdRef = useRef(noteId)
   const touchedLinesRef = useRef(new Map()) // 行 blot -> { textChanged, checkToggled }
   const taskLineTimerRef = useRef(null)
@@ -118,31 +123,6 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
       if (range && quillRef.current) {
         quillRef.current.setSelection(range.index, range.length)
       }
-    },
-    // カーソル行の本文（タグを除く）と期限タグの表示文字列を返す。メモ本文は変更しない。
-    getCurrentLine() {
-      const q = quillRef.current
-      if (!q) return null
-      const range = q.getSelection() ?? savedRangeRef.current
-      if (!range) return null
-      const [line, offset] = q.getLine(range.index)
-      if (!line) return null
-      const start = range.index - offset
-      const ops = q.getContents(start, Math.max(0, line.length() - 1)).ops
-      let text = ''
-      let deadline = null
-      for (const op of ops) {
-        if (typeof op.insert !== 'string') continue
-        if (op.attributes?.tag === 'deadline') { deadline ??= op.insert; continue }
-        if (op.attributes?.tag) continue
-        text += op.insert
-      }
-      // 手動でタスク化したとき、自動登録と二重にならないよう行に taskid を付ける
-      const assignTaskId = (id) => {
-        if (!line.scroll || !line.domNode.isConnected) return
-        q.formatLine(q.getIndex(line), 1, { taskid: id }, Quill.sources.API)
-      }
-      return { text: text.trim(), deadline, taskId: line.formats().taskid ?? null, assignTaskId }
     },
     insertLink(text, url, range) {
       const q = quillRef.current
@@ -279,9 +259,6 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
       })
     }
 
-    // ツールバー操作でフォーカスが外れてもカーソル行を参照できるよう保持する
-    quill.on('selection-change', (range) => { if (range) savedRangeRef.current = range })
-
     // ── メモの行から正式タスクを自動登録・更新 ──
     // 利用者が触った行だけを記録し、入力が止まったらまとめて App に渡す
     const markLines = (index, length, flag) => {
@@ -323,6 +300,78 @@ const Editor = forwardRef(function Editor({ noteId, content, onChange, readOnly 
       if (entries.length) onTaskLinesRef.current(noteIdRef.current, entries)
     }
     flushTaskLinesRef.current = flushTaskLines
+
+    // 行末に期限・時間・タグのバッジを付け、行とタスクを対応づける
+    const applyTaskEntry = (line, { deadline, minutes, domain, taskId }) => {
+      if (!line.scroll || !line.domNode.isConnected) return
+      const lineStart = quill.getIndex(line)
+      // 既に書かれていたタグは入力欄の内容で置き換える
+      let pos = lineStart
+      const tagRanges = []
+      for (const op of quill.getContents(lineStart, line.length() - 1).ops) {
+        const len = typeof op.insert === 'string' ? op.insert.length : 1
+        if (['deadline', 'time', 'domain'].includes(op.attributes?.tag)) tagRanges.push([pos, len])
+        pos += len
+      }
+      for (const [at, len] of tagRanges.reverse()) quill.deleteText(at, len, Quill.sources.API)
+      let end = quill.getIndex(line) + line.length() - 1
+      const text = quill.getText(lineStart, end - lineStart)
+      const trailing = text.length - text.trimEnd().length
+      if (trailing) { quill.deleteText(end - trailing, trailing, Quill.sources.API); end -= trailing }
+      const tags = []
+      if (deadline) tags.push([formatDeadlineTag(deadline.month, deadline.day), 'deadline'])
+      if (minutes != null) tags.push([formatDurationTag(minutes), 'time'])
+      tags.push([DOMAIN_TAGS[domain], 'domain'])
+      // 隣のタグに空白が取り込まれないよう、まとめて挿入してから範囲ごとに書式を付け直す
+      const inserted = tags.map(([label]) => ` ${label}`).join('')
+      quill.insertText(end, inserted, Quill.sources.API)
+      quill.formatText(end, inserted.length, 'tag', false, Quill.sources.API)
+      let at = end
+      for (const [label, type] of tags) {
+        quill.formatText(at + 1, label.length, 'tag', type, Quill.sources.API)
+        at += 1 + label.length
+      }
+      quill.formatLine(quill.getIndex(line), 1, { taskid: taskId }, Quill.sources.API)
+    }
+
+    // 入力欄を閉じたあと、Enter で作られた次の行へカーソルを戻す
+    const focusAfter = (line) => {
+      if (!line.scroll || !line.domNode.isConnected) { quill.focus(); return }
+      quill.focus()
+      quill.setSelection(quill.getIndex(line) + line.length(), 0, Quill.sources.SILENT)
+    }
+
+    // チェックボックス行の末尾で Enter → タスクの入力（期限・時間・タグ）を始める。
+    // Quill の標準の Enter 処理はエディタにフォーカスを戻すため、この場合だけ先に受け取り、
+    // 改行を入れてから入力欄へフォーカスを移す（iPhone でキーボードを閉じないよう同じ操作内で行う）。
+    if (!readOnly) {
+      quill.keyboard.addBinding({ key: 'Enter' }, (range, context) => {
+        const line = context.line
+        if (!onTaskEnterRef.current || range.length > 0 || context.offset !== line.length() - 1) return true
+        const formats = line.formats()
+        if (formats.list !== 'unchecked' || formats.taskid) return true
+        const ops = quill.getContents(quill.getIndex(line), line.length() - 1).ops
+        const parsed = parseTaskLine(ops, formats)
+        if (!parsed.title) return true
+        quill.insertText(range.index, '\n', formats, Quill.sources.USER)
+        const tagText = (type) => ops.find(op => op.attributes?.tag === type)?.insert ?? ''
+        onTaskEnterRef.current({
+          noteId: noteIdRef.current,
+          title: parsed.title,
+          deadlineText: tagText('deadline'),
+          durationText: tagText('time'),
+          apply: (values) => applyTaskEntry(line, values),
+          focusAfter: () => focusAfter(line),
+        })
+        return false
+      })
+      const enterBindings = quill.keyboard.bindings.Enter
+      enterBindings.unshift(enterBindings.pop())
+    }
+
+    quill.on('selection-change', (range, oldRange, source) => {
+      if (range && !oldRange && source === Quill.sources.USER) onUserFocusRef.current?.()
+    })
 
     if (!readOnly) {
       quill.on('text-change', (delta, _old, source) => {
