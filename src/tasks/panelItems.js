@@ -8,6 +8,7 @@ import { inferDueAt } from './noteTaskSync'
 export const CATEGORY_LABELS = {
   note: 'メモ',
   ai: 'AI秘書',
+  direct: 'タスクノート',
   unlinked: '元ノートなし',
 }
 
@@ -60,9 +61,10 @@ export function extractNoteDeadlineLines(notes) {
   return lines
 }
 
+// note: 元ノートあり / ai: AI秘書が登録 / direct: 仮想ノート「タスク」で直接追加 / unlinked: 元ノートが削除された
 function categoryOf(task, noteById) {
-  if (task.sourceNoteId && noteById.has(task.sourceNoteId)) return 'note'
-  return task.source === 'ai_secretary' ? 'ai' : 'unlinked'
+  if (task.sourceNoteId) return noteById.has(task.sourceNoteId) ? 'note' : 'unlinked'
+  return task.source === 'ai_secretary' ? 'ai' : 'direct'
 }
 
 const PROBLEM_STATES = new Set(['conflict', 'rejected'])
@@ -134,8 +136,9 @@ export function buildPanelItems({ tasks, notes, now = Date.now() }) {
 export function filterChips(items) {
   const chips = []
   const seenNotes = new Set()
-  if (items.some(i => i.category === 'ai')) chips.push({ id: 'ai', label: CATEGORY_LABELS.ai })
-  if (items.some(i => i.category === 'unlinked')) chips.push({ id: 'unlinked', label: CATEGORY_LABELS.unlinked })
+  for (const category of ['ai', 'direct', 'unlinked']) {
+    if (items.some(i => i.category === category)) chips.push({ id: category, label: CATEGORY_LABELS[category] })
+  }
   for (const item of items) {
     if (item.category !== 'note' || seenNotes.has(item.noteId)) continue
     seenNotes.add(item.noteId)
@@ -146,7 +149,7 @@ export function filterChips(items) {
 
 export function matchesChip(item, chipId) {
   if (!chipId) return true
-  if (chipId === 'ai' || chipId === 'unlinked') return item.category === chipId
+  if (chipId in CATEGORY_LABELS) return item.category === chipId
   return item.category === 'note' && `note:${item.noteId}` === chipId
 }
 
@@ -188,9 +191,9 @@ export function groupBySection({ open, completed }, now = Date.now()) {
 }
 
 // 項目に小さく出す作成元
-//   AI秘書 / 元ノート名 / メモ未紐付け（正式タスクに未登録のメモの行） / 元ノートなし
+//   AI秘書 / 元ノート名 / タスクノート / メモ未紐付け（正式タスクに未登録のメモの行） / 元ノートなし
 export function sourceLabel(item) {
   if (item.kind === 'note') return 'メモ未紐付け'
   if (item.category === 'note') return item.noteTitle
-  return item.category === 'ai' ? 'AI秘書' : '元ノートなし'
+  return CATEGORY_LABELS[item.category]
 }

@@ -685,7 +685,8 @@ export default function App() {
                 taskState={taskState}
                 onOpenNote={handleSelectNote}
                 onOpenSyncIssues={() => setSyncIssueOpen(true)}
-                onToast={showToast} />
+                onToast={showToast}
+                onStartTaskEntry={handleTaskEnter} />
             ) : currentNote ? (
               <>
                 <div id="qm-editor"

@@ -46,6 +46,7 @@ describe('buildPanelItems', () => {
     task({ id: 'linked', title: '体育館の予約', sourceNoteId: 'n1', dueAt: due(10, 30), domain: 'table-tennis' }),
     task({ id: 'ai', title: '大会要項を確認', source: 'ai_secretary', dueAt: due(10, 31) }),
     task({ id: 'orphan', title: '元メモが消えたタスク', sourceNoteId: 'deleted-note' }),
+    task({ id: 'direct', title: 'タスクノートで追加', dueAt: due(11, 9) }),
     task({ id: 'done', title: '終わったタスク', source: 'ai_secretary', status: 'completed', completedAt: 5 }),
   ]
 
@@ -55,6 +56,7 @@ describe('buildPanelItems', () => {
       ['note', '会場に連絡', 'note'],
       ['task', '体育館の予約', 'note'],
       ['task', '大会要項を確認', 'ai'],
+      ['task', 'タスクノートで追加', 'direct'],
       ['task', '元メモが消えたタスク', 'unlinked'],
     ])
     expect(open.filter(i => i.title === '体育館の予約')).toHaveLength(1)
@@ -75,7 +77,8 @@ describe('buildPanelItems', () => {
 
   it('絞り込みチップ', () => {
     const { open } = buildPanelItems({ tasks, notes, now: NOW })
-    expect(filterChips(open).map(c => c.label)).toEqual(['AI秘書', '元ノートなし', '練習メモ'])
+    expect(filterChips(open).map(c => c.label)).toEqual(['AI秘書', 'タスクノート', '元ノートなし', '練習メモ'])
+    expect(open.filter(i => matchesChip(i, 'direct')).map(i => i.title)).toEqual(['タスクノートで追加'])
     expect(open.filter(i => matchesChip(i, 'ai')).map(i => i.title)).toEqual(['大会要項を確認'])
     expect(open.filter(i => matchesChip(i, 'note:n1')).map(i => i.title)).toEqual(['会場に連絡', '体育館の予約'])
   })
@@ -95,6 +98,7 @@ describe('sectionOf / sourceLabel', () => {
     expect(sourceLabel({ kind: 'task', category: 'ai' })).toBe('AI秘書')
     expect(sourceLabel({ kind: 'task', category: 'note', noteTitle: '練習メモ' })).toBe('練習メモ')
     expect(sourceLabel({ kind: 'task', category: 'unlinked' })).toBe('元ノートなし')
+    expect(sourceLabel({ kind: 'task', category: 'direct' })).toBe('タスクノート')
     expect(sourceLabel({ kind: 'note' })).toBe('メモ未紐付け')
   })
 })
