@@ -120,6 +120,48 @@ describe('ノート一覧の仮想ノート「タスク」', () => {
   })
 })
 
+describe('仮想ノート「タスク」から追加', () => {
+  it('タスク名 → 期限 → 時間 → タグで正式タスクを1件だけ作り、メモは作らない', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(tasksItem())
+    const region = screen.getByRole('region', { name: 'タスク' })
+
+    await user.type(within(region).getByLabelText('追加するタスク名'), '名簿を更新する{Enter}')
+    const bar = screen.getByRole('dialog', { name: 'タスクの入力' })
+    expect(within(bar).getByLabelText('期限')).toHaveFocus()
+    await user.keyboard('1105{Enter}30m{Enter}2')
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    const creates = h.repo.state.calls.filter(c => c.type === 'create')
+    expect(creates).toHaveLength(1)
+    const created = h.repo.raw('u1', creates[0].id)
+    expect(created).toMatchObject({
+      title: '名簿を更新する', domain: 'business', estimatedMinutes: 30,
+      source: 'quickmemo', sourceNoteId: null, status: 'not_started', revision: 1,
+    })
+    expect(new Date(created.dueAt).getMonth() + 1).toBe(11)
+    expect(h.calls.filter(c => c[0] === 'create')).toEqual([]) // ノートは作らない
+
+    const row = within(region).getByText('名簿を更新する').closest('.nlp-item')
+    expect(within(row).getByText('タスクノート')).toBeInTheDocument()
+    expect(within(region).getByLabelText('追加するタスク名')).toHaveValue('')
+    expect(within(region).getByLabelText('追加するタスク名')).toHaveFocus()
+    expect(screen.queryByRole('dialog', { name: 'タスクの入力' })).not.toBeInTheDocument()
+  })
+
+  it('入力欄を閉じるとタスクを作らず、書いた名前は残す', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(tasksItem())
+    const region = screen.getByRole('region', { name: 'タスク' })
+    await user.type(within(region).getByLabelText('追加するタスク名'), '途中のタスク{Enter}')
+    await user.keyboard('{Escape}')
+    expect(h.repo.state.calls.filter(c => c.type === 'create')).toEqual([])
+    expect(within(region).getByLabelText('追加するタスク名')).toHaveValue('途中のタスク')
+  })
+})
+
 describe('通常ノートの操作は従来どおり', () => {
   it('選択・新規作成・削除ができる', async () => {
     const user = userEvent.setup()

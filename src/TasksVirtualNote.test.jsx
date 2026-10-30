@@ -15,13 +15,13 @@ const UID = 'u1'
 const NOW = new Date(2026, 9, 30, 9, 0, 0).getTime()
 const at = (m, d) => new Date(2026, m - 1, d, 23, 59, 59).getTime()
 
-function Harness({ repo, notes = [], onOpenNote = () => {} }) {
+function Harness({ repo, notes = [], onOpenNote = () => {}, onStartTaskEntry = () => {} }) {
   const taskState = useTasks(UID, repo)
   const [issuesOpen, setIssuesOpen] = useState(false)
   return (
     <>
       <TasksVirtualNote notes={notes} taskState={taskState} now={NOW}
-        onOpenNote={onOpenNote} onOpenSyncIssues={() => setIssuesOpen(true)} />
+        onOpenNote={onOpenNote} onOpenSyncIssues={() => setIssuesOpen(true)} onStartTaskEntry={onStartTaskEntry} />
       <SyncIssueDialog open={issuesOpen} taskState={taskState} onClose={() => setIssuesOpen(false)} />
     </>
   )
@@ -168,5 +168,29 @@ describe('仮想ノート「タスク」', () => {
     await flush()
     expect(repo.raw(UID, 's-1').status).toBe('completed')
     expect(repo.raw(UID, 's-2').status).toBe('not_started')
+  })
+
+  it('タスク名を書いて Enter で、期限・時間・タグの入力を始める（メモには紐づけない）', async () => {
+    const user = userEvent.setup()
+    const onStartTaskEntry = vi.fn()
+    render(<Harness repo={repo} onStartTaskEntry={onStartTaskEntry} />)
+    const input = screen.getByLabelText('追加するタスク名')
+
+    await user.type(input, '{Enter}')
+    expect(onStartTaskEntry).not.toHaveBeenCalled() // 空欄では始めない
+    expect(screen.getByRole('button', { name: '追加' })).toBeDisabled()
+
+    await user.type(input, '  名簿を  更新する {Enter}')
+    expect(onStartTaskEntry).toHaveBeenCalledWith(expect.objectContaining({
+      noteId: null, title: '名簿を 更新する', deadlineText: '', durationText: '',
+    }))
+    // 確定したら欄を空にし、閉じたら入力欄へ戻る
+    const entry = onStartTaskEntry.mock.calls[0][0]
+    act(() => entry.apply())
+    expect(input).toHaveValue('')
+    input.blur()
+    act(() => entry.focusAfter())
+    expect(input).toHaveFocus()
+    expect(repo.state.calls).toEqual([]) // この時点ではまだ何も作らない
   })
 })
