@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPanelItems, extractNoteDeadlineLines, filterChips, matchesChip } from './panelItems'
+import { buildPanelItems, extractNoteDeadlineLines, filterChips, matchesChip, sectionOf, sourceLabel } from './panelItems'
 
 const NOW = new Date(2026, 9, 28, 9, 0, 0).getTime()
 const due = (m, d) => new Date(2026, m - 1, d, 23, 59, 59).getTime()
@@ -75,8 +75,26 @@ describe('buildPanelItems', () => {
 
   it('絞り込みチップ', () => {
     const { open } = buildPanelItems({ tasks, notes, now: NOW })
-    expect(filterChips(open).map(c => c.label)).toEqual(['AI秘書', 'メモ未紐付け', '練習メモ'])
+    expect(filterChips(open).map(c => c.label)).toEqual(['AI秘書', '元ノートなし', '練習メモ'])
     expect(open.filter(i => matchesChip(i, 'ai')).map(i => i.title)).toEqual(['大会要項を確認'])
     expect(open.filter(i => matchesChip(i, 'note:n1')).map(i => i.title)).toEqual(['会場に連絡', '体育館の予約'])
+  })
+})
+
+describe('sectionOf / sourceLabel', () => {
+  const now = new Date(2026, 9, 30, 9, 0, 0).getTime()
+  it('同期の確認 → 期限超過 → 今日 → 今後 → 期限なし → 完了済みに分ける', () => {
+    expect(sectionOf({ kind: 'task', syncState: 'conflict', status: 'completed', dueAt: null }, now)).toBe('problem')
+    expect(sectionOf({ kind: 'task', syncState: 'synced', status: 'not_started', dueAt: due(10, 29) }, now)).toBe('overdue')
+    expect(sectionOf({ kind: 'task', syncState: 'synced', status: 'in_progress', dueAt: due(10, 30) }, now)).toBe('today')
+    expect(sectionOf({ kind: 'note', checked: false, dueAt: due(11, 2) }, now)).toBe('upcoming')
+    expect(sectionOf({ kind: 'task', syncState: 'pending', status: 'not_started', dueAt: null }, now)).toBe('nodue')
+    expect(sectionOf({ kind: 'note', checked: true, dueAt: due(10, 1) }, now)).toBe('completed')
+  })
+  it('作成元の表示', () => {
+    expect(sourceLabel({ kind: 'task', category: 'ai' })).toBe('AI秘書')
+    expect(sourceLabel({ kind: 'task', category: 'note', noteTitle: '練習メモ' })).toBe('練習メモ')
+    expect(sourceLabel({ kind: 'task', category: 'unlinked' })).toBe('元ノートなし')
+    expect(sourceLabel({ kind: 'note' })).toBe('メモ未紐付け')
   })
 })

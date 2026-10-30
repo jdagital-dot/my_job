@@ -8,7 +8,7 @@ import { inferDueAt } from './noteTaskSync'
 export const CATEGORY_LABELS = {
   note: 'メモ',
   ai: 'AI秘書',
-  unlinked: 'メモ未紐付け',
+  unlinked: '元ノートなし',
 }
 
 // メモ本文（Quill Delta）から、期限タグ付きの行を行単位で取り出す
@@ -148,4 +148,49 @@ export function matchesChip(item, chipId) {
   if (!chipId) return true
   if (chipId === 'ai' || chipId === 'unlinked') return item.category === chipId
   return item.category === 'note' && `note:${item.noteId}` === chipId
+}
+
+// ── 表示区分（右上の一覧と仮想ノート「タスク」で共通） ──
+
+export const SECTION_ORDER = ['problem', 'overdue', 'today', 'upcoming', 'nodue', 'completed']
+export const SECTION_LABELS = {
+  problem: '同期の確認が必要',
+  overdue: '期限超過',
+  today: '今日が期限',
+  upcoming: '今後の期限',
+  nodue: '期限なし',
+  completed: '完了済み',
+}
+
+function endOfDay(now) {
+  const d = new Date(now)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime()
+}
+function startOfDay(now) {
+  const d = new Date(now)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+export function sectionOf(item, now = Date.now()) {
+  if (item.kind === 'task' && PROBLEM_STATES.has(item.syncState)) return 'problem'
+  if (item.kind === 'task' ? item.status === 'completed' : item.checked) return 'completed'
+  if (item.dueAt == null) return 'nodue'
+  if (item.dueAt < startOfDay(now)) return 'overdue'
+  if (item.dueAt <= endOfDay(now)) return 'today'
+  return 'upcoming'
+}
+
+// 一覧を表示区分ごとにまとめる。区分内は buildPanelItems の並び（期限順）を保つ。
+export function groupBySection({ open, completed }, now = Date.now()) {
+  const groups = Object.fromEntries(SECTION_ORDER.map(s => [s, []]))
+  for (const item of [...open, ...completed]) groups[sectionOf(item, now)].push(item)
+  return SECTION_ORDER.filter(s => groups[s].length).map(s => ({ section: s, label: SECTION_LABELS[s], items: groups[s] }))
+}
+
+// 項目に小さく出す作成元
+//   AI秘書 / 元ノート名 / メモ未紐付け（正式タスクに未登録のメモの行） / 元ノートなし
+export function sourceLabel(item) {
+  if (item.kind === 'note') return 'メモ未紐付け'
+  if (item.category === 'note') return item.noteTitle
+  return item.category === 'ai' ? 'AI秘書' : '元ノートなし'
 }

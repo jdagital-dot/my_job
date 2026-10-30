@@ -1,79 +1,6 @@
 import { useState, useMemo } from 'react'
-import { STATUSES, completionChanges } from './tasks/taskModel'
-import { DOMAIN_TAGS, formatDurationTag } from './tasks/noteTaskSync'
-import { CATEGORY_LABELS, buildPanelItems, filterChips, matchesChip } from './tasks/panelItems'
-
-const SYNC_LABELS = { pending: '同期待ち', conflict: '競合', rejected: '保存できません' }
-
-function formatDue(ms, now) {
-  const d = new Date(ms)
-  const sameYear = d.getFullYear() === new Date(now).getFullYear()
-  const date = sameYear ? `${d.getMonth() + 1}月${d.getDate()}日` : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
-  const timed = !(d.getHours() === 23 && d.getMinutes() === 59)
-  return timed ? `${date} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` : date
-}
-
-function TaskRow({ item, now, onToggle, onOpenNote, onOpenSyncIssues }) {
-  const done = item.status === 'completed'
-  const problem = item.syncState === 'conflict' || item.syncState === 'rejected'
-  const overdue = !done && item.dueAt != null && item.dueAt < now
-  const openNote = item.noteId ? () => onOpenNote(item.noteId) : undefined
-  return (
-    <div className={`nlp-item nlp-task${done ? ' done' : ''}${openNote ? '' : ' no-note'}`} onClick={openNote}>
-      <button type="button" role="checkbox" aria-checked={done} disabled={problem}
-        className={`nlp-check${done ? ' checked' : ''}`}
-        aria-label={done ? `「${item.title}」の完了を取り消す` : `「${item.title}」を完了にする`}
-        onClick={(e) => { e.stopPropagation(); onToggle(item) }}>
-        {done && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        )}
-      </button>
-      <div className="nlp-body">
-        <div className="nlp-item-title">{item.title}</div>
-        <div className="nlp-item-meta">
-          <span className={`nlp-source nlp-source-${item.category}`}>
-            {item.category === 'note' ? item.noteTitle : CATEGORY_LABELS[item.category]}
-          </span>
-          {item.dueAt != null && (
-            <span data-tag-type="deadline" className={overdue ? 'nlp-overdue' : undefined}>{formatDue(item.dueAt, now)}</span>
-          )}
-          {item.estimatedMinutes != null && <span data-tag-type="time">{formatDurationTag(item.estimatedMinutes)}</span>}
-          {DOMAIN_TAGS[item.domain] && <span data-tag-type="domain">{DOMAIN_TAGS[item.domain]}</span>}
-          {item.status !== 'not_started' && item.status !== 'completed' && (
-            <span className="nlp-status">{STATUSES[item.status]}</span>
-          )}
-          {SYNC_LABELS[item.syncState] && (
-            <span className={`nlp-sync nlp-sync-${item.syncState}`} role={problem ? 'alert' : undefined}>
-              {SYNC_LABELS[item.syncState]}
-            </span>
-          )}
-          {problem && (
-            <button type="button" className="nlp-resolve"
-              onClick={(e) => { e.stopPropagation(); onOpenSyncIssues() }}>確認する</button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function NoteLineRow({ item, now, onOpenNote }) {
-  const overdue = !item.checked && item.dueAt < now
-  return (
-    <div className="nlp-item nlp-line" onClick={() => onOpenNote(item.noteId)}>
-      <span className="nlp-line-mark" aria-hidden="true">{item.checked ? '☑' : '☐'}</span>
-      <div className="nlp-body">
-        <div className="nlp-item-title">{item.title}</div>
-        <div className="nlp-item-meta">
-          <span className="nlp-source nlp-source-note">{item.noteTitle}</span>
-          <span data-tag-type="deadline" className={overdue ? 'nlp-overdue' : undefined}>{item.deadlineText}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { buildPanelItems, filterChips, matchesChip } from './tasks/panelItems'
+import { renderTaskItem, toggleTaskCompletion } from './TaskRows'
 
 // 右上のリストアイコンで開く一覧。
 // Firebase の正式タスク（AI 秘書が登録したメモに紐づかないタスクを含む）と、
@@ -94,16 +21,8 @@ export default function NoteListPanel({
 
   const openNote = (noteId) => { onNoteSelect(noteId); onClose() }
 
-  const toggle = (item) => {
-    if (!actions) return
-    // 既存の同期キュー（オフライン再送・競合検出）を通して更新する
-    const result = actions.updateTask(item.id, completionChanges(item.status !== 'completed'))
-    if (!result.ok) onToast?.(result.errors[0])
-  }
-
-  const renderItem = (item) => item.kind === 'task'
-    ? <TaskRow key={item.key} item={item} now={now} onToggle={toggle} onOpenNote={openNote} onOpenSyncIssues={onOpenSyncIssues} />
-    : <NoteLineRow key={item.key} item={item} now={now} onOpenNote={openNote} />
+  const toggle = (item) => toggleTaskCompletion(actions, item, onToast)
+  const renderItem = (item) => renderTaskItem(item, { now, onToggle: toggle, onOpenNote: openNote, onOpenSyncIssues })
 
   return (
     <div className={`note-list-panel${open ? ' open' : ''}`} aria-label="ノート一覧">

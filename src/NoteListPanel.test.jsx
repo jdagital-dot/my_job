@@ -100,11 +100,11 @@ describe('NOTES パネルの正式タスク', () => {
     expect(onNoteSelect).toHaveBeenLastCalledWith('note-1')
   })
 
-  it('元のメモがないタスクは独立タスク（メモ未紐付け）として扱う', () => {
+  it('元のメモがないタスクは独立タスク（元ノートなし）として扱う', () => {
     repo.remoteWrite(UID, buildTask({ id: 'q-1', title: '元メモが消えたタスク', sourceNoteId: 'gone' }))
     render(<Harness repo={repo} />)
     const row = screen.getByText('元メモが消えたタスク').closest('.nlp-item')
-    expect(within(row).getByText('メモ未紐付け')).toBeInTheDocument()
+    expect(within(row).getByText('元ノートなし')).toBeInTheDocument()
   })
 
   it('競合を利用者に表示し、自動で上書きせずに選んでもらう', async () => {
