@@ -10,6 +10,9 @@ import ResourcePicker from './ResourcePicker'
 import NoteListPanel from './NoteListPanel'
 import TaskEntryBar from './TaskEntryBar'
 import SyncIssueDialog from './SyncIssueDialog'
+import TasksVirtualNote from './TasksVirtualNote'
+import { TASKS_NOTE_ID, isVirtualNoteId } from './tasks/virtualNote'
+import { buildPanelItems } from './tasks/panelItems'
 import { useTasks } from './useTasks'
 import {
   entryToTaskInput, lineChanges, loadLastDomain, saveLastDomain,
@@ -136,14 +139,21 @@ export default function App() {
   const activeNotes  = notes.filter(n => !n.deleted)
   const trashedNotes = notes.filter(n => n.deleted)
   const currentNote  = notes.find(n => n.id === currentNoteId) ?? null
+  const showingTasksNote = currentNoteId === TASKS_NOTE_ID
+  const tasksOpenCount = useMemo(
+    () => (taskState.loaded ? buildPanelItems({ tasks: taskState.tasks, notes }).open.length : null),
+    [taskState.loaded, taskState.tasks, notes],
+  )
   const secondNote   = notes.find(n => n.id === secondNoteId)  ?? null
 
   // On notes loaded: restore last note, or wait then create new one
   useEffect(() => {
     if (notesLoading || !user) return
+    // 仮想ノート「タスク」は notes にないが、選択を通常ノートへ戻さない
+    if (isVirtualNoteId(currentNoteId)) return
     if (currentNoteId && notes.find(n => n.id === currentNoteId && !n.deleted)) return
     const lastId = localStorage.getItem(LAST_NOTE_KEY)
-    if (lastId && notes.find(n => n.id === lastId && !n.deleted)) {
+    if (lastId === TASKS_NOTE_ID || (lastId && notes.find(n => n.id === lastId && !n.deleted))) {
       setCurrentNoteId(lastId); return
     }
     if (activeNotes.length > 0) { setCurrentNoteId(activeNotes[0].id); return }
@@ -436,7 +446,7 @@ export default function App() {
   }
 
   const handleOpenHistory = () => {
-    if (!currentNoteId) return
+    if (!currentNoteId || isVirtualNoteId(currentNoteId)) return
     setHistoryEntries(getHistory(currentNoteId))
     setHistoryPanelOpen(true)
   }
@@ -557,6 +567,7 @@ export default function App() {
         notes={activeNotes}
         trashedNotes={trashedNotes}
         currentNoteId={currentNoteId}
+        tasksOpenCount={tasksOpenCount}
         onSelect={handleSelectNote}
         onNew={handleNewNote}
         onDelete={handleDeleteNote}
@@ -668,7 +679,14 @@ export default function App() {
           {/* Left pane */}
           <div className={`editor-pane${focusedPane === 'left' && splitMode ? ' pane-focused' : ''}`}
             onFocus={() => setFocusedPane('left')}>
-            {currentNote ? (
+            {showingTasksNote ? (
+              <TasksVirtualNote
+                notes={notes}
+                taskState={taskState}
+                onOpenNote={handleSelectNote}
+                onOpenSyncIssues={() => setSyncIssueOpen(true)}
+                onToast={showToast} />
+            ) : currentNote ? (
               <>
                 <div id="qm-editor"
                   style={{ display: preview ? 'none' : 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
@@ -731,7 +749,7 @@ export default function App() {
             onCancel={() => closeTaskEntry(true)} />
         )}
         {/* Bottom toolbar — programmatic (works for focused pane) */}
-        <div id="qm-toolbar" style={taskEntry ? { display: 'none' } : undefined} className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
+        <div id="qm-toolbar" style={taskEntry || (showingTasksNote && !splitMode) ? { display: 'none' } : undefined} className="bottom-toolbar" role="toolbar" aria-label="テキスト書式">
           <button className="tb-btn" onClick={() => applyFormat('bold', true)} aria-label="太字"><b>B</b></button>
           <button className="tb-btn" onClick={() => applyFormat('header', 1)} aria-label="見出し">H1</button>
           <button className="tb-btn" onClick={() => applyFormat('list', 'bullet')} aria-label="箇条書き">

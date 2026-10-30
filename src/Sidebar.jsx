@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import ResourceItem from './ResourceItem'
 import { fmtDate } from './dateUtils'
+import { TASKS_NOTE_ID, TASKS_NOTE_TITLE } from './tasks/virtualNote'
 
 function NoteIcon() {
   return (
@@ -9,6 +10,16 @@ function NoteIcon() {
       <polyline points="14 2 14 8 20 8"/>
       <line x1="16" y1="13" x2="8" y2="13"/>
       <line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  )
+}
+
+function TaskListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="17" rx="2"/>
+      <polyline points="7 10 9 12 13 8"/>
+      <line x1="7" y1="16" x2="17" y2="16"/>
     </svg>
   )
 }
@@ -43,7 +54,7 @@ function TrashIcon() {
 }
 
 export default function Sidebar({
-  open, notes, trashedNotes, currentNoteId,
+  open, notes, trashedNotes, currentNoteId, tasksOpenCount = null,
   onSelect, onNew, onDelete,
   onRestore, onPermanentDelete,
   resources = [], allTags = [], resourcesSupported = false, isElectron = false,
@@ -82,6 +93,22 @@ export default function Sidebar({
       </div>
 
       <div className="note-list" role="list">
+        {/* 表示専用の仮想ノート。削除・名前変更・本文編集はできない */}
+        <div
+          className={`note-item virtual-note${currentNoteId === TASKS_NOTE_ID ? ' active' : ''}`}
+          onClick={() => onSelect(TASKS_NOTE_ID)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(TASKS_NOTE_ID) } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={currentNoteId === TASKS_NOTE_ID}
+          aria-label={`${TASKS_NOTE_TITLE}（未完了 ${tasksOpenCount ?? 0}件）`}
+        >
+          <span className="note-icon"><TaskListIcon /></span>
+          <div className="note-info">
+            <div className="note-title">{TASKS_NOTE_TITLE}</div>
+            <div className="note-date">{tasksOpenCount == null ? 'すべてのタスク' : `未完了 ${tasksOpenCount}件`}</div>
+          </div>
+        </div>
         {notes.length === 0 && <p className="empty">メモがありません</p>}
         {notes.map(n => (
           <div

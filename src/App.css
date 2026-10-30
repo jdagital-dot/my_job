@@ -734,3 +734,20 @@ body {
   background: rgba(0,0,0,0.04); color: #666; font-size: 0.78rem; font-weight: 600;
   font-family: inherit; cursor: pointer;
 }
+
+/* ── 仮想ノート「タスク」 ── */
+.tasks-note { flex: 1; overflow-y: auto; padding: 24px 20px calc(80px + env(safe-area-inset-bottom)); max-width: 760px; width: 100%; margin: 0 auto; }
+.tasks-note-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.tasks-note-title { font-size: 1.6rem; font-weight: 700; color: #111; }
+.tasks-note-count { font-size: 0.8rem; color: #999; font-weight: 600; }
+.tasks-note-section { margin-bottom: 14px; }
+.tasks-note-section-title {
+  display: flex; align-items: center; gap: 6px; margin: 8px 4px 4px;
+  font-size: 0.72rem; font-weight: 700; color: #999; letter-spacing: 0.04em;
+}
+.tasks-note-section-title span { font-weight: 600; color: #bbb; }
+.tasks-note-problem .tasks-note-section-title, .tasks-note-overdue .tasks-note-section-title { color: #dc2626; }
+.tasks-note .nlp-item { margin-bottom: 2px; }
+.nlp-source-unregistered { color: #b45309; font-weight: 600; }
+.note-item.virtual-note .note-icon { color: #111; }
+.note-item.virtual-note .note-date { color: #999; }
